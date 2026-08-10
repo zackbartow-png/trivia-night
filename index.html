@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#fffaf0">
+  <title>Trivia Night — Game Manager</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="manager-page">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <button class="logo" id="logoHome" aria-label="Trivia Night home">
+        <span class="logo-main">TRIVIA</span>
+        <span class="logo-ribbon">★ NIGHT ★</span>
+      </button>
+
+      <nav class="side-nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="dashboard"><span>⌂</span> Dashboard</button>
+        <button class="nav-item" data-view="dashboard"><span>▣</span> Games</button>
+        <button class="nav-item" data-action="categories"><span>◆</span> Categories</button>
+        <button class="nav-item" data-action="questions"><span>?</span> Questions</button>
+      </nav>
+
+      <div class="sidebar-tip">
+        <div class="tip-icon">💡</div>
+        <strong>Host tip</strong>
+        <p>Build the whole game here, then open Presenter on the projector.</p>
+        <div class="mini-confetti" aria-hidden="true">◆ ● ★ ◆</div>
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div>
+          <div class="eyebrow-ui">TRIVIA NIGHT CONTROL ROOM</div>
+          <h1 id="pageTitle">My Trivia Games</h1>
+          <p id="pageSubtitle">Create, manage, and launch your trivia nights.</p>
+        </div>
+        <div class="topbar-actions">
+          <span id="status" class="save-status" aria-live="polite"></span>
+          <label class="ui-btn ui-btn-ghost" for="importFile">⇧ Import</label>
+          <input id="importFile" type="file" accept="application/json,.json" hidden>
+          <button id="createGame" class="ui-btn ui-btn-primary">＋ Create New Game</button>
+        </div>
+      </header>
+
+      <section id="dashboardView" class="view-panel"></section>
+      <section id="editorView" class="view-panel" hidden></section>
+    </main>
+  </div>
+
+  <div class="corner-confetti corner-confetti-a" aria-hidden="true">★ ◆ ●</div>
+  <div class="corner-confetti corner-confetti-b" aria-hidden="true">◆ ★ ●</div>
+
+  <script src="app.js"></script>
+</body>
+</html>
