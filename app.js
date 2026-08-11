@@ -361,6 +361,7 @@ function gameCard(g) {
       <div class="game-actions">
         <button class="ui-btn ui-btn-small" data-action="edit" data-id="${g.id}">✎ Edit</button>
         <button class="ui-btn ui-btn-small" data-action="duplicate" data-id="${g.id}">▣ Duplicate</button>
+        <button class="ui-btn ui-btn-small" data-action="answer-pdf" data-id="${g.id}">PDF Answer Sheets</button>
         <a class="ui-btn ui-btn-small ui-btn-teal" href="play.html?game=${encodeURIComponent(g.id)}" target="_blank">▶ Start Game</a>
       </div>
     </article>`;
@@ -577,7 +578,8 @@ function renderEditor() {
           <button class="ui-btn ui-btn-teal" data-action="save">✓ Save Game</button>
           <button class="ui-btn" data-action="duplicate" data-id="${game.id}">▣ Duplicate</button>
           <label class="ui-btn" for="importFile">⇧ Import</label>
-          <button class="ui-btn" data-action="export">⇩ Export</button>
+          <button class="ui-btn" data-action="export">⇩ Export Game</button>
+          <button class="ui-btn" data-action="answer-pdf">PDF Answer Sheets</button>
           <a class="ui-btn ui-btn-primary" href="play.html?game=${encodeURIComponent(game.id)}" target="_blank">▶ Start Presenter</a>
         </div>
       </div>
@@ -651,6 +653,19 @@ function exportGame() {
   const blob=new Blob([JSON.stringify(game,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`${game.title.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'trivia-game'}.json`; a.click(); URL.revokeObjectURL(url);
 }
+function exportAnswerSheetsPdf(id) {
+  const game = games.find(g=>g.id===id) || selectedGame();
+  if (!game) return;
+  if (!window.TriviaAnswerSheets?.download) { alert('The PDF exporter did not load. Please refresh the page and try again.'); return; }
+  try {
+    window.TriviaAnswerSheets.download(game);
+    setStatus('Answer-sheet PDF exported');
+  } catch (error) {
+    console.error(error);
+    alert('The answer-sheet PDF could not be created. Please refresh and try again.');
+  }
+}
+
 function importGame(file) {
   const reader=new FileReader(); reader.onload=()=>{
     try {
@@ -686,6 +701,7 @@ function routeAction(el) {
   if (action==='edit') openEditor(el.dataset.id);
   if (action==='duplicate') duplicateGame(el.dataset.id);
   if (action==='export') exportGame();
+  if (action==='answer-pdf') exportAnswerSheetsPdf(el.dataset.id);
   if (action==='delete') deleteGame();
   if (action==='clear-question') { resetHelper(); clearQuestion(); }
   if (action==='helper-suggest') { aiHelperError=''; suggestHelper(); }
