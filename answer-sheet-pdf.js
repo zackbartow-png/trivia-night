@@ -40,6 +40,39 @@
     while(size>minSize && approxWidth(text,size,bold)>maxWidth) size-=0.5;
     return size;
   }
+
+  function wrapTitle(text,maxWidth,maxSize=13,minSize=7.25){
+    const words=asciiText(text).toUpperCase().trim().split(/\s+/).filter(Boolean);
+    if(!words.length) return {lines:['CATEGORY'],size:maxSize};
+    // Helvetica-Bold is wider than our generic approximation for many uppercase words.
+    // Use a deliberately conservative width estimate so exported headings never clip.
+    const titleWidth=(value,size)=>asciiText(value).length * size * 0.68;
+    for(let size=maxSize; size>=minSize; size-=0.25){
+      const one=words.join(' ');
+      if(titleWidth(one,size)<=maxWidth) return {lines:[one],size};
+      // Try every natural word break and choose the most balanced 2-line result.
+      let best=null;
+      for(let i=1;i<words.length;i++){
+        const a=words.slice(0,i).join(' '), b=words.slice(i).join(' ');
+        const wa=titleWidth(a,size), wb=titleWidth(b,size);
+        if(wa<=maxWidth && wb<=maxWidth){
+          const score=Math.max(wa,wb)+Math.abs(wa-wb)*0.12;
+          if(!best || score<best.score) best={lines:[a,b],size,score};
+        }
+      }
+      if(best) return {lines:best.lines,size:best.size};
+    }
+    // Last-resort word-safe wrapping at minimum size. Never clip mid-word.
+    const lines=[]; let line='';
+    for(const word of words){
+      const candidate=line ? line+' '+word : word;
+      if(!line || approxWidth(candidate,minSize,true)<=maxWidth) line=candidate;
+      else { lines.push(line); line=word; }
+    }
+    if(line) lines.push(line);
+    return {lines:lines.slice(0,2),size:minSize};
+  }
+
   function circlePath(cx,cy,r){
     const k=0.5522847498*r;
     return `${fmt(cx+r)} ${fmt(cy)} m\n${fmt(cx+r)} ${fmt(cy+k)} ${fmt(cx+k)} ${fmt(cy+r)} ${fmt(cx)} ${fmt(cy+r)} c\n${fmt(cx-k)} ${fmt(cy+r)} ${fmt(cx-r)} ${fmt(cy+k)} ${fmt(cx-r)} ${fmt(cy)} c\n${fmt(cx-r)} ${fmt(cy-k)} ${fmt(cx-k)} ${fmt(cy-r)} ${fmt(cx)} ${fmt(cy-r)} c\n${fmt(cx+k)} ${fmt(cy-r)} ${fmt(cx+r)} ${fmt(cy-k)} ${fmt(cx+r)} ${fmt(cy)} c\nh\n`;
@@ -86,9 +119,21 @@
     s += rgbCmd(border,true) + '1 w ' + roundedRect(x,y,CARD_W,CARD_H,12) + 'S\n';
     s += rgbCmd(accent) + `${fmt(x)} ${fmt(y+CARD_H-36)} ${fmt(CARD_W)} 36 re f\n`;
     s += textCmd(x+14,y+CARD_H-23,8.5,`ROUND ${index+1}`,'F2',white);
-    const size=fitSize(name.toUpperCase(),14,8.5,CARD_W-104,true);
-    const tw=approxWidth(name.toUpperCase(),size,true);
-    s += textCmd(x+CARD_W-14-tw,y+CARD_H-25,size,name.toUpperCase(),'F2',white);
+    // Keep category titles inside the colored header without clipping.
+    // Reserve the left side for ROUND # and wrap long category names at word boundaries.
+    const titleAreaW=CARD_W-108;
+    const title=wrapTitle(name,titleAreaW,13.5,7.25);
+    if(title.lines.length===1){
+      const tw=asciiText(title.lines[0]).length * title.size * 0.68;
+      s += textCmd(x+CARD_W-14-tw,y+CARD_H-24.5,title.size,title.lines[0],'F2',white);
+    } else {
+      const lineSize=Math.min(title.size,9.25);
+      title.lines.slice(0,2).forEach((line,li)=>{
+        const tw=asciiText(line).length * lineSize * 0.68;
+        const ty=y+CARD_H-(li===0?15.5:28.5);
+        s += textCmd(x+CARD_W-14-tw,ty,lineSize,line,'F2',white);
+      });
+    }
     s += textCmd(x+14,y+CARD_H-50,7.5,music?'MUSIC ROUND':'TRIVIA ROUND','F2',muted);
     const firstY=y+CARD_H-68;
     for(let i=0;i<10;i++) s += answerRow(x+15, firstY-(i*16), CARD_W-30, i+1, accent);
