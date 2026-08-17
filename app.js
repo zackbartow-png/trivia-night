@@ -233,7 +233,7 @@ const blankCategory = (i) => ({
   description: '',
   timerEnabled: false,
   timerSeconds: 30,
-  questions: Array.from({ length: 10 }, () => ({ question: '', answer: '', image: '', youtubeUrl: '' }))
+  questions: Array.from({ length: 10 }, () => ({ question: '', answer: '', image: '', youtubeUrl: '', youtubeIn: 0, youtubeOut: 0 }))
 });
 const blankBonus = () => ({ enabled: true, name: 'Bonus Round', question: '', answer: '' });
 const createBlankGame = () => ({
@@ -265,6 +265,16 @@ let aiHelperError = '';
 let aiDifficulty = 'medium';
 let aiFocus = '';
 
+// Inline YouTube trim editor state (Music Rounds only)
+let musicTrimPlayer = null;
+let musicTrimApiPromise = null;
+let musicTrimUiTimer = null;
+let musicTrimStopTimer = null;
+let musicTrimDraft = null;
+let musicTrimLoadedVideoId = '';
+let musicTrimPlayerReady = false;
+let musicTrimIsScrubbing = false;
+
 function loadGames() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -288,7 +298,9 @@ function normalizeGame(game) {
         question: source.questions?.[qi]?.question || '',
         answer: source.questions?.[qi]?.answer || '',
         image: source.questions?.[qi]?.image || '',
-        youtubeUrl: source.questions?.[qi]?.youtubeUrl || source.questions?.[qi]?.youtube || ''
+        youtubeUrl: source.questions?.[qi]?.youtubeUrl || source.questions?.[qi]?.youtube || '',
+        youtubeIn: Math.max(0, Number(source.questions?.[qi]?.youtubeIn ?? source.questions?.[qi]?.youtubeStart ?? 0) || 0),
+        youtubeOut: Math.max(0, Number(source.questions?.[qi]?.youtubeOut ?? source.questions?.[qi]?.youtubeEnd ?? 0) || 0)
       }))
     };
   });
@@ -331,6 +343,33 @@ function setStatus(text='Saved') {
   setStatus.t = setTimeout(() => el.textContent = '', 1500);
 }
 function touch(game, message='Saved') { game.updatedAt = new Date().toISOString(); persist(); setStatus(message); }
+
+// Keep this manager window synchronized with edits made in the separate Host Music Player.
+// This prevents an older in-memory copy of the game from overwriting saved YouTube clip marks.
+function syncGamesFromStorage({render=false}={}) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    if (!Array.isArray(parsed)) return false;
+    const currentId = selectedId;
+    games = parsed.map(normalizeGame);
+    if (currentId && games.some(g=>g.id===currentId)) selectedId=currentId;
+    else selectedId = localStorage.getItem(SELECTED_KEY) || games[0]?.id || '';
+    if (render) {
+      if (currentView==='editor' && selectedGame()) renderEditor();
+      else renderDashboard();
+    }
+    return true;
+  } catch (error) {
+    console.warn('Could not refresh game data from storage', error);
+    return false;
+  }
+}
+
+function saveActiveMusicTrimDraft(message='Clip marks saved') {
+  if (!activeMusicQuestion() || !musicTrimDraft) return false;
+  syncMusicTrimDraftFromInputs();
+  return commitMusicTrimMarks(message);
+}
 
 function setView(view) {
   currentView = view;
@@ -511,6 +550,194 @@ async function generateAIHelper(fillEmpty=false) {
   }
 }
 
+function parseTimecode(value='') {
+  const raw=String(value??'').trim(); if(!raw) return 0;
+  if(/^\d+(?:\.\d+)?$/.test(raw)) return Math.max(0,Number(raw)||0);
+  const parts=raw.split(':').map(x=>Number(x));
+  if(parts.some(x=>!Number.isFinite(x)||x<0)) return 0;
+  if(parts.length===2) return Math.max(0,parts[0]*60+parts[1]);
+  if(parts.length===3) return Math.max(0,parts[0]*3600+parts[1]*60+parts[2]);
+  return 0;
+}
+function formatTimecode(seconds=0) {
+  const total=Math.max(0,Math.round(Number(seconds)||0));
+  const h=Math.floor(total/3600), m=Math.floor((total%3600)/60), sec=total%60;
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`;
+}
+function formatTimecodePrecise(seconds=0) {
+  const n=Math.max(0,Number(seconds)||0), whole=Math.floor(n), tenths=Math.floor((n-whole)*10+1e-6);
+  const h=Math.floor(whole/3600), m=Math.floor((whole%3600)/60), sec=whole%60;
+  const base=h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`;
+  return `${base}.${tenths}`;
+}
+function youtubeVideoId(input='') {
+  const raw=String(input||'').trim(); if(!raw) return '';
+  if(/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+  try {
+    const u=new URL(raw), host=u.hostname.replace(/^www\./,'').toLowerCase();
+    if(host==='youtu.be') return (u.pathname.split('/').filter(Boolean)[0]||'').slice(0,11);
+    if(host.endsWith('youtube.com')) {
+      const v=u.searchParams.get('v'); if(v) return v.slice(0,11);
+      const parts=u.pathname.split('/').filter(Boolean);
+      if(['embed','shorts','live'].includes(parts[0])) return (parts[1]||'').slice(0,11);
+    }
+  } catch {}
+  return '';
+}
+function loadYouTubeTrimApi() {
+  if(window.YT?.Player) return Promise.resolve(window.YT);
+  if(musicTrimApiPromise) return musicTrimApiPromise;
+  musicTrimApiPromise=new Promise((resolve,reject)=>{
+    const existing=document.querySelector('script[data-trivia-youtube-api]');
+    const previous=window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady=()=>{
+      try { if(typeof previous==='function') previous(); } catch {}
+      if(window.YT?.Player) resolve(window.YT); else reject(new Error('YouTube player API did not initialize.'));
+    };
+    if(!existing){
+      const script=document.createElement('script');
+      script.src='https://www.youtube.com/iframe_api';
+      script.async=true; script.dataset.triviaYoutubeApi='1';
+      script.onerror=()=>reject(new Error('Could not load the YouTube player. Check your internet connection.'));
+      document.head.appendChild(script);
+    }
+    setTimeout(()=>{ if(window.YT?.Player) resolve(window.YT); },500);
+  });
+  return musicTrimApiPromise;
+}
+function activeMusicQuestion() {
+  const game=selectedGame();
+  if(!game || activeBonus) return null;
+  const cat=game.categories?.[activeCategory];
+  if(!cat || cat.type!=='music') return null;
+  return cat.questions?.[activeQuestion] || null;
+}
+function destroyMusicTrimEditor() {
+  if(musicTrimUiTimer){clearInterval(musicTrimUiTimer);musicTrimUiTimer=null;}
+  if(musicTrimStopTimer){clearInterval(musicTrimStopTimer);musicTrimStopTimer=null;}
+  try { musicTrimPlayer?.destroy?.(); } catch {}
+  musicTrimPlayer=null; musicTrimLoadedVideoId=''; musicTrimPlayerReady=false; musicTrimIsScrubbing=false; musicTrimDraft=null;
+}
+function trimDraftIn(){return Math.max(0,Number(musicTrimDraft?.in)||0);}
+function trimDraftOut(){const start=trimDraftIn(),out=Math.max(0,Number(musicTrimDraft?.out)||0);return out>start?out:0;}
+function musicTrimCurrentTime(){try{return Math.max(0,Number(musicTrimPlayer?.getCurrentTime?.()||0));}catch{return 0;}}
+function musicTrimDuration(){try{return Math.max(0,Number(musicTrimPlayer?.getDuration?.()||0));}catch{return 0;}}
+function setMusicTrimMessage(text='', kind='') {
+  const el=document.querySelector('#musicTrimSaveStatus'); if(!el)return;
+  el.textContent=text; el.dataset.kind=kind;
+}
+function updateMusicTrimSummary(saved=false) {
+  if(!musicTrimDraft)return;
+  const start=trimDraftIn(),out=trimDraftOut();
+  const inInput=document.querySelector('#musicTrimInInput'), outInput=document.querySelector('#musicTrimOutInput');
+  if(inInput && document.activeElement!==inInput) inInput.value=formatTimecodePrecise(start);
+  if(outInput && document.activeElement!==outInput) outInput.value=out?formatTimecodePrecise(out):'';
+  const inEl=document.querySelector('#musicTrimInValue'), outEl=document.querySelector('#musicTrimOutValue'), lenEl=document.querySelector('#musicTrimLengthValue');
+  if(inEl)inEl.textContent=formatTimecodePrecise(start);
+  if(outEl)outEl.textContent=out?formatTimecodePrecise(out):'Not set';
+  if(lenEl)lenEl.textContent=out?formatTimecodePrecise(out-start):'Manual stop';
+  if(saved)setMusicTrimMessage(`Saved: ${formatTimecodePrecise(start)} → ${out?formatTimecodePrecise(out):'manual stop'}`,'saved');
+}
+function updateMusicTrimTimeline(force=false) {
+  if(!musicTrimPlayerReady||!musicTrimPlayer)return;
+  const now=musicTrimCurrentTime(),dur=musicTrimDuration();
+  const nowEl=document.querySelector('#musicTrimCurrent'),durEl=document.querySelector('#musicTrimDuration'),scrub=document.querySelector('#musicTrimScrubber');
+  if(nowEl)nowEl.textContent=formatTimecodePrecise(now);
+  if(durEl)durEl.textContent=dur?formatTimecode(dur):'—';
+  if(scrub&&dur>0){scrub.max=String(dur);if(!musicTrimIsScrubbing||force)scrub.value=String(Math.min(now,dur));}
+}
+function startMusicTrimStopMonitor() {
+  if(musicTrimStopTimer)clearInterval(musicTrimStopTimer);
+  musicTrimStopTimer=setInterval(()=>{
+    const out=trimDraftOut(); if(!out||!musicTrimPlayer)return;
+    const now=musicTrimCurrentTime();
+    if(now>=out-.06){
+      try{musicTrimPlayer.pauseVideo();musicTrimPlayer.seekTo(out,true);}catch{}
+      clearInterval(musicTrimStopTimer);musicTrimStopTimer=null;updateMusicTrimTimeline(true);
+      setMusicTrimMessage(`Clip stopped at OUT ${formatTimecodePrecise(out)}.`,'saved');
+    }
+  },80);
+}
+function commitMusicTrimMarks(message='Clip marks saved') {
+  const q=activeMusicQuestion(); if(!q||!musicTrimDraft)return false;
+  const start=trimDraftIn(),out=trimDraftOut();
+  q.youtubeIn=Math.round(start*10)/10;
+  q.youtubeOut=out?Math.round(out*10)/10:0;
+  const game=selectedGame(); if(game)touch(game,message);
+  updateMusicTrimSummary(true);
+  return true;
+}
+function syncMusicTrimDraftFromInputs() {
+  if(!musicTrimDraft)return;
+  const start=parseTimecode(document.querySelector('#musicTrimInInput')?.value||'0');
+  const rawOut=String(document.querySelector('#musicTrimOutInput')?.value||'').trim();
+  const out=rawOut?parseTimecode(rawOut):0;
+  musicTrimDraft.in=Math.max(0,start);
+  musicTrimDraft.out=out>musicTrimDraft.in?out:0;
+  updateMusicTrimSummary(false);
+}
+async function initMusicTrimEditor() {
+  const q=activeMusicQuestion(); if(!q)return;
+  musicTrimDraft={in:Math.max(0,Number(q.youtubeIn)||0),out:Math.max(0,Number(q.youtubeOut)||0)};
+  updateMusicTrimSummary(false);
+  const id=youtubeVideoId(q.youtubeUrl);
+  const shell=document.querySelector('#musicTrimVideoShell');
+  if(!shell)return;
+  if(!id){shell.innerHTML='<div class="music-trim-placeholder"><strong>Paste a YouTube link above</strong><span>Then click Load / Reload Video to open the trim editor.</span></div>';setMusicTrimMessage('No YouTube video loaded.','');return;}
+  shell.innerHTML='<div id="musicTrimPlayer"></div>';
+  setMusicTrimMessage('Loading YouTube trim editor…','');
+  try{
+    await loadYouTubeTrimApi();
+    if(!document.querySelector('#musicTrimPlayer')||activeMusicQuestion()!==q)return;
+    musicTrimPlayer=new YT.Player('musicTrimPlayer',{
+      width:'100%',height:'100%',videoId:id,
+      playerVars:{controls:1,playsinline:1,rel:0,origin:location.origin},
+      events:{
+        onReady:()=>{
+          musicTrimPlayerReady=true;musicTrimLoadedVideoId=id;
+          const cue={videoId:id,startSeconds:trimDraftIn()};if(trimDraftOut())cue.endSeconds=trimDraftOut();
+          try{musicTrimPlayer.cueVideoById(cue);}catch{}
+          musicTrimUiTimer=setInterval(()=>updateMusicTrimTimeline(false),100);
+          updateMusicTrimTimeline(true);setMusicTrimMessage('Ready. Scrub the video, then set your IN and OUT marks.','');
+        },
+        onStateChange:e=>{
+          if(window.YT&&e.data===YT.PlayerState.PLAYING)startMusicTrimStopMonitor();
+          else if(musicTrimStopTimer){clearInterval(musicTrimStopTimer);musicTrimStopTimer=null;}
+        },
+        onError:e=>setMusicTrimMessage(`YouTube could not load this video (error ${e.data}). Try another upload.`,'error')
+      }
+    });
+  }catch(error){shell.innerHTML='<div class="music-trim-placeholder"><strong>YouTube player could not load</strong><span>Check the link and your internet connection.</span></div>';setMusicTrimMessage(error.message||'YouTube player failed to load.','error');}
+}
+function reloadMusicTrimVideo() {
+  const q=activeMusicQuestion(); if(!q)return;
+  q.youtubeUrl=(document.querySelector('#youtubeUrlInput')?.value||'').trim();
+  touch(selectedGame(),'YouTube link saved');
+  if(musicTrimUiTimer){clearInterval(musicTrimUiTimer);musicTrimUiTimer=null;}
+  if(musicTrimStopTimer){clearInterval(musicTrimStopTimer);musicTrimStopTimer=null;}
+  try{musicTrimPlayer?.destroy?.();}catch{}
+  musicTrimPlayer=null;musicTrimPlayerReady=false;musicTrimLoadedVideoId='';
+  initMusicTrimEditor();
+}
+function setMusicTrimInHere() {
+  if(!musicTrimPlayerReady)return setMusicTrimMessage('Load the YouTube video first.','error');
+  const t=Math.round(musicTrimCurrentTime()*10)/10;
+  musicTrimDraft.in=t;if(trimDraftOut()&&trimDraftOut()<=t+.1)musicTrimDraft.out=0;
+  updateMusicTrimSummary(false);commitMusicTrimMarks('IN mark saved');
+}
+function setMusicTrimOutHere() {
+  if(!musicTrimPlayerReady)return setMusicTrimMessage('Load the YouTube video first.','error');
+  const t=Math.round(musicTrimCurrentTime()*10)/10,start=trimDraftIn();
+  if(t<=start+.2)return setMusicTrimMessage(`Move past the IN mark (${formatTimecodePrecise(start)}) before setting OUT.`,'error');
+  musicTrimDraft.out=t;updateMusicTrimSummary(false);commitMusicTrimMarks('OUT mark saved');
+}
+function playMusicTrimClip() {
+  if(!musicTrimPlayerReady)return;
+  const start=trimDraftIn(),out=trimDraftOut(),now=musicTrimCurrentTime();
+  try{if(now<start-.25||(out&&now>=out-.08))musicTrimPlayer.seekTo(start,true);musicTrimPlayer.playVideo();}catch{}
+}
+function goMusicTrimTo(t){if(!musicTrimPlayerReady)return;try{musicTrimPlayer.seekTo(Math.max(0,Number(t)||0),true);updateMusicTrimTimeline(true);}catch{}}
+
 function roundTypeLabel(cat){ return cat.type==='music'?'Music Round':cat.type==='picture'?'Picture Round':'Trivia Round'; }
 function defaultRoundDescription(cat){
   if(cat.type==='music') return '♫ Music Round · 10 songs';
@@ -539,6 +766,7 @@ function compressImageFile(file, maxW=1280, maxH=900, quality=.8){
 }
 
 function renderEditor() {
+  destroyMusicTrimEditor();
   const game = selectedGame();
   const host = document.querySelector('#editorView');
   if (!game) { setView('dashboard'); renderDashboard(); return; }
@@ -610,11 +838,37 @@ function renderEditor() {
       <h2>${cat.icon} ${esc(cat.name)} · ${isMusic?'Song':isPicture?'Picture':'Question'} ${activeQuestion+1}</h2>
       ${(!isPicture ? renderAIHelper(cat,isMusic) : '')}
       ${isMusic ? `
-        <div class="external-music-callout"><div class="external-music-icon">▶</div><div><strong>YouTube host player</strong><span>Paste a YouTube link for each song. The video stays in a separate host-only player window; the projector continues to show only QUESTION 1–10.</span></div></div>
-        <div class="form-field"><label>YouTube Link for Song ${activeQuestion+1}</label><input id="youtubeUrlInput" class="text-input" value="${esc(q.youtubeUrl || '')}" placeholder="https://www.youtube.com/watch?v=..."></div>
+        <div class="external-music-callout"><div class="external-music-icon">✂</div><div><strong>YouTube Clip Editor</strong><span>Paste the YouTube link, trim the exact portion you want to use, and save the IN/OUT marks directly to this song.</span></div></div>
+        <div class="form-field"><label>YouTube Link for Song ${activeQuestion+1}</label><div class="music-link-row"><input id="youtubeUrlInput" class="text-input" value="${esc(q.youtubeUrl || '')}" placeholder="https://www.youtube.com/watch?v=..."><button class="ui-btn" data-action="music-trim-load">Load / Reload Video</button></div></div>
+
+        <section class="music-trim-editor" aria-label="YouTube clip editor">
+          <div class="music-trim-head"><div><span class="panel-title">TRIM SONG ${activeQuestion+1}</span><strong>Choose exactly what the players will hear</strong></div><span class="music-trim-saved-pill">Saved with this game</span></div>
+          <div id="musicTrimVideoShell" class="music-trim-video-shell"><div class="music-trim-placeholder"><strong>Loading trim editor…</strong></div></div>
+          <div class="music-trim-timeline">
+            <div class="music-trim-clock"><strong id="musicTrimCurrent">0:00.0</strong><span>/</span><span id="musicTrimDuration">—</span></div>
+            <input id="musicTrimScrubber" class="music-trim-scrubber" type="range" min="0" max="1" step="0.1" value="0" aria-label="Video timeline">
+          </div>
+          <div class="music-trim-mark-grid">
+            <label><span>IN</span><input id="musicTrimInInput" class="text-input" value="${esc(formatTimecodePrecise(q.youtubeIn || 0))}" placeholder="0:30.0"></label>
+            <label><span>OUT</span><input id="musicTrimOutInput" class="text-input" value="${q.youtubeOut ? esc(formatTimecodePrecise(q.youtubeOut)) : ''}" placeholder="0:50.0"></label>
+            <div class="music-trim-readout"><span>Saved clip</span><strong><b id="musicTrimInValue">${esc(formatTimecodePrecise(q.youtubeIn || 0))}</b> → <b id="musicTrimOutValue">${q.youtubeOut ? esc(formatTimecodePrecise(q.youtubeOut)) : 'Not set'}</b></strong><small>Length: <b id="musicTrimLengthValue">${q.youtubeOut > q.youtubeIn ? esc(formatTimecodePrecise(q.youtubeOut-q.youtubeIn)) : 'Manual stop'}</b></small></div>
+          </div>
+          <div class="music-trim-actions">
+            <button class="ui-btn" data-action="music-trim-play">▶ Play Clip</button>
+            <button class="ui-btn" data-action="music-trim-pause">Ⅱ Pause</button>
+            <button class="ui-btn ui-btn-primary" data-action="music-trim-set-in">① Set IN Here</button>
+            <button class="ui-btn ui-btn-primary" data-action="music-trim-set-out">② Set OUT Here</button>
+            <button class="ui-btn" data-action="music-trim-go-in">Go to IN</button>
+            <button class="ui-btn" data-action="music-trim-go-out">Go to OUT</button>
+            <button class="ui-btn" data-action="music-trim-clear-out">Clear OUT</button>
+            <button class="ui-btn ui-btn-teal" data-action="music-trim-save">✓ Save Clip Marks</button>
+          </div>
+          <div id="musicTrimSaveStatus" class="music-trim-save-status">The IN and OUT marks are stored with Song ${activeQuestion+1} and are included in your .trivia export.</div>
+        </section>
+
         <div class="form-field"><label>Answer for Song ${activeQuestion+1}</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="Example: Take on Me — a-ha"></div>
         <div class="music-host-actions"><a class="ui-btn ui-btn-primary" href="music-player.html?game=${encodeURIComponent(game.id)}" target="_blank">♫ Open Host Music Player</a></div>
-        <p class="music-editor-help">The host player keeps the standard YouTube player visible on your laptop. <strong>Do not project that window.</strong> The audience-facing presenter still displays only <strong>QUESTION ${activeQuestion+1}</strong>. The answer remains hidden until the 1–10 answer slide.</p>
+        <p class="music-editor-help"><strong>The video is visible here only while you build the round.</strong> During the actual game, use the Host Music Player on your laptop and keep the projector on the Presenter window. The audience still sees only <strong>QUESTION ${activeQuestion+1}</strong>.</p>
       ` : isPicture ? `
         <div class="picture-round-callout"><div>🖼️</div><div><strong>Picture Round</strong><span>Upload the image the audience should identify. The answer stays hidden until the answer slide.</span></div></div>
         <div class="form-field"><label>Picture ${activeQuestion+1}</label><input id="pictureImageInput" class="text-input file-input" type="file" accept="image/*"></div>
@@ -671,6 +925,7 @@ function renderEditor() {
     <div id="presentationModalHost"></div>`;
   renderCategoryModal();
   renderPresentationModal();
+  if (isMusic && !activeBonus) setTimeout(initMusicTrimEditor, 0);
 }
 function openCategoryModal() {
   const game = selectedGame(); if (!game) return;
@@ -747,7 +1002,7 @@ function deleteGame() {
 }
 function clearQuestion() {
   const game=selectedGame(); if (!game) return;
-  game.categories[activeCategory].questions[activeQuestion]={question:'',answer:'',image:'',youtubeUrl:''};
+  game.categories[activeCategory].questions[activeQuestion]={question:'',answer:'',image:'',youtubeUrl:'',youtubeIn:0,youtubeOut:0};
   touch(game,'Cleared'); renderEditor();
 }
 function clearBonus() {
@@ -805,6 +1060,16 @@ function saveActiveField(target) {
   if (target.id==='questionInput') q.question=target.value;
   if (target.id==='answerInput') q.answer=target.value;
   if (target.id==='youtubeUrlInput') q.youtubeUrl=target.value.trim();
+  if (target.id==='musicTrimInInput') { if(musicTrimDraft){musicTrimDraft.in=parseTimecode(target.value);if(trimDraftOut()&&trimDraftOut()<=musicTrimDraft.in)musicTrimDraft.out=0;updateMusicTrimSummary(false);setMusicTrimMessage('IN value changed — click Save Clip Marks to keep it.','dirty');} return; }
+  if (target.id==='musicTrimOutInput') { if(musicTrimDraft){const out=parseTimecode(target.value);musicTrimDraft.out=out>trimDraftIn()?out:0;updateMusicTrimSummary(false);setMusicTrimMessage('OUT value changed — click Save Clip Marks to keep it.','dirty');} return; }
+  if (target.id==='youtubeInInput') {
+    q.youtubeIn=parseTimecode(target.value);
+    if(q.youtubeOut && q.youtubeOut<=q.youtubeIn) q.youtubeOut=0;
+  }
+  if (target.id==='youtubeOutInput') {
+    const out=parseTimecode(target.value);
+    q.youtubeOut=out>q.youtubeIn ? out : 0;
+  }
   if (target.id==='bonusNameInput') game.bonus.name=target.value;
   if (target.id==='bonusQuestionInput') game.bonus.question=target.value;
   if (target.id==='bonusAnswerInput') game.bonus.answer=target.value;
@@ -817,7 +1082,7 @@ function saveActiveField(target) {
   if (target.id==='categoryDraftTimerSeconds' && categoryDraft) { categoryDraft.timerSeconds=Math.min(300,Math.max(5,Number(target.value)||30)); return; }
   if (target.id==='aiDifficulty') { aiDifficulty=target.value || 'medium'; return; }
   if (target.id==='aiFocus') { aiFocus=target.value; return; }
-  if (!['gameTitle','questionInput','answerInput','youtubeUrlInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput'].includes(target.id)) return;
+  if (!['gameTitle','questionInput','answerInput','youtubeUrlInput','youtubeInInput','youtubeOutInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput'].includes(target.id)) return;
   touch(game);
   if (target.id==='questionInput' || target.id==='bonusQuestionInput') { const preview=document.querySelector('.mini-question'); if(preview) preview.textContent=target.value || (activeBonus ? 'Your bonus question will appear here.' : 'Your question will appear here.'); }
 }
@@ -836,12 +1101,21 @@ function routeAction(el) {
   if (action==='ai-generate') generateAIHelper(false);
   if (action==='ai-fill') generateAIHelper(true);
   if (action==='clear-bonus') clearBonus();
-  if (action==='save') { persist(); setStatus('Saved'); renderDashboard(); }
-  if (action==='category') { activeBonus=false; activeCategory=Number(el.dataset.index); activeQuestion=0; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
-  if (action==='question') { activeBonus=false; activeQuestion=Number(el.dataset.index); resetHelper(); renderEditor(); }
-  if (action==='bonus') { activeBonus=true; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
-  if (action==='categories') { if (!selectedGame()) return; currentView='editor'; activeBonus=false; activeCategory=0; renderAll(); openCategoryModal(); }
-  if (action==='questions') { if (!selectedGame()) return; currentView='editor'; activeBonus=false; activeQuestion=0; renderAll(); }
+  if (action==='save') { if(activeMusicQuestion() && musicTrimDraft) commitMusicTrimMarks('Clip marks saved'); persist(); setStatus('Saved'); renderDashboard(); }
+  if (action==='music-trim-load') reloadMusicTrimVideo();
+  if (action==='music-trim-play') playMusicTrimClip();
+  if (action==='music-trim-pause') { try{musicTrimPlayer?.pauseVideo?.();}catch{} }
+  if (action==='music-trim-set-in') setMusicTrimInHere();
+  if (action==='music-trim-set-out') setMusicTrimOutHere();
+  if (action==='music-trim-go-in') goMusicTrimTo(trimDraftIn());
+  if (action==='music-trim-go-out') { const out=trimDraftOut(); if(out)goMusicTrimTo(out); }
+  if (action==='music-trim-clear-out') { if(musicTrimDraft){musicTrimDraft.out=0;updateMusicTrimSummary(false);commitMusicTrimMarks('OUT mark cleared');} }
+  if (action==='music-trim-save') { syncMusicTrimDraftFromInputs(); commitMusicTrimMarks('Clip marks saved'); }
+  if (action==='category') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=false; activeCategory=Number(el.dataset.index); activeQuestion=0; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
+  if (action==='question') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=false; activeQuestion=Number(el.dataset.index); resetHelper(); renderEditor(); }
+  if (action==='bonus') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=true; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
+  if (action==='categories') { if (!selectedGame()) return; saveActiveMusicTrimDraft('Clip marks saved'); currentView='editor'; activeBonus=false; activeCategory=0; renderAll(); openCategoryModal(); }
+  if (action==='questions') { if (!selectedGame()) return; saveActiveMusicTrimDraft('Clip marks saved'); currentView='editor'; activeBonus=false; activeQuestion=0; renderAll(); }
   if (action==='edit-category') { closePresentationModal(); openCategoryModal(); }
   if (action==='category-cancel') closeCategoryModal();
   if (action==='presentation-settings') { closeCategoryModal(); openPresentationModal(); }
@@ -922,20 +1196,53 @@ async function handleImageInput(target){
   target.value='';
 }
 
+document.addEventListener('pointerdown', e=>{ if(e.target.id==='musicTrimScrubber') musicTrimIsScrubbing=true; });
+document.addEventListener('pointerup', e=>{ if(e.target.id==='musicTrimScrubber'){musicTrimIsScrubbing=false;updateMusicTrimTimeline(true);} });
+document.addEventListener('input', e=>{
+  if(e.target.id!=='musicTrimScrubber'||!musicTrimPlayerReady)return;
+  musicTrimIsScrubbing=true;const t=Number(e.target.value)||0;
+  const nowEl=document.querySelector('#musicTrimCurrent');if(nowEl)nowEl.textContent=formatTimecodePrecise(t);
+  try{musicTrimPlayer.seekTo(t,false);}catch{}
+});
+document.addEventListener('change', e=>{
+  if(e.target.id!=='musicTrimScrubber'||!musicTrimPlayerReady)return;
+  const t=Number(e.target.value)||0;try{musicTrimPlayer.seekTo(t,true);}catch{}musicTrimIsScrubbing=false;updateMusicTrimTimeline(true);
+});
+
 document.addEventListener('click', e=>{
   if (e.target.matches('[data-category-backdrop]')) { closeCategoryModal(); return; }
   if (e.target.matches('[data-presentation-backdrop]')) { closePresentationModal(); renderEditor(); return; }
   const el=e.target.closest('[data-action]'); if (el) routeAction(el);
-  const nav=e.target.closest('[data-view]'); if (nav) { currentView=nav.dataset.view; closeCategoryModal(); closePresentationModal(); renderAll(); }
+  const nav=e.target.closest('[data-view]'); if (nav) { saveActiveMusicTrimDraft('Clip marks saved'); currentView=nav.dataset.view; closeCategoryModal(); closePresentationModal(); renderAll(); }
 });
 document.addEventListener('input', e=> saveActiveField(e.target));
 document.addEventListener('change', e=>{
   if(['announcementImagesInput','halftimeImageInput','pictureImageInput'].includes(e.target.id)){ handleImageInput(e.target); return; }
   saveActiveField(e.target);
 });
+// Manual IN/OUT values also save when the field is committed (blur/change).
+document.addEventListener('change', e=>{
+  if(e.target?.id==='musicTrimInInput' || e.target?.id==='musicTrimOutInput') {
+    saveActiveMusicTrimDraft('Clip marks saved');
+  }
+});
+
+// The Host Music Player writes changes to the same localStorage game. Refresh this tab
+// whenever those changes arrive or whenever the user returns from the Host Player.
+window.addEventListener('storage', e=>{
+  if(e.key===STORAGE_KEY) syncGamesFromStorage({render:true});
+});
+window.addEventListener('focus', ()=>syncGamesFromStorage({render:true}));
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden) syncGamesFromStorage({render:true});
+});
+window.addEventListener('beforeunload', ()=>{
+  try { saveActiveMusicTrimDraft('Clip marks saved'); persist(); } catch {}
+});
+
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ if(categoryModalOpen) closeCategoryModal(); if(presentationModalOpen){ closePresentationModal(); renderEditor(); } } });
 document.querySelector('#createGame').addEventListener('click', newGame);
-document.querySelector('#logoHome').addEventListener('click', ()=>{currentView='dashboard'; closeCategoryModal(); closePresentationModal(); renderAll();});
+document.querySelector('#logoHome').addEventListener('click', ()=>{saveActiveMusicTrimDraft('Clip marks saved'); currentView='dashboard'; closeCategoryModal(); closePresentationModal(); renderAll();});
 document.querySelector('#importFile').addEventListener('change', e=>{ if(e.target.files[0]) importGame(e.target.files[0]); e.target.value=''; });
 
 persist();
