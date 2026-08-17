@@ -11,10 +11,6 @@ let timerHandle=null, announcementHandle=null;
 let hostMusicCategoryIndex=null;
 const presenterStateKey=`triviaNightPresenterState:${gameId||'default'}`;
 const presenterChannel=('BroadcastChannel' in window && gameId) ? new BroadcastChannel(`trivia-night-${gameId}`) : null;
-const musicHostStateKey=`triviaNightMusicHostState:${gameId||'default'}`;
-const musicHostCommandKey=`triviaNightMusicHostCommand:${gameId||'default'}`;
-let musicHostState=null;
-let musicHostStatusTimer=null;
 
 const stage=document.querySelector('#stage');
 const gameName=document.querySelector('#gameName');
@@ -46,37 +42,6 @@ function broadcastPresenterState(){
   const payload={type:'presenter-state',gameId:game.id,phase,categoryIndex,questionIndex,updatedAt:Date.now()};
   try { localStorage.setItem(presenterStateKey,JSON.stringify(payload)); } catch {}
   try { presenterChannel?.postMessage(payload); } catch {}
-}
-
-function musicHostConnected(){
-  return Boolean(musicHostState && musicHostState.gameId===game?.id && Date.now()-Number(musicHostState.updatedAt||0)<3500);
-}
-function updateMusicSlideControls(){
-  const btn=stage.querySelector('[data-music-play]');
-  if(!btn || phase!=='question' || catType(game?.categories?.[categoryIndex])!=='music') return;
-  // Keep the audience-facing control simple: it is always a PLAY button.
-  // The command includes this slide's category/question indexes so the host
-  // player loads and plays the exact saved clip for the current slide.
-  btn.classList.remove('is-playing');
-  const icon=btn.querySelector('.music-play-icon');
-  const label=btn.querySelector('.music-play-label');
-  if(icon) icon.textContent='▶';
-  if(label) label.textContent='PLAY MUSIC';
-}
-function sendMusicHostCommand(command){
-  if(phase!=='question' || catType(game?.categories?.[categoryIndex])!=='music') return;
-  const payload={type:'music-player-command',gameId:game.id,command,categoryIndex,questionIndex,nonce:`${Date.now()}-${Math.random()}`,updatedAt:Date.now()};
-  try { presenterChannel?.postMessage(payload); } catch {}
-  try { localStorage.setItem(musicHostCommandKey,JSON.stringify(payload)); } catch {}
-}
-function applyMusicHostState(state){
-  if(!state || state.type!=='music-player-state' || state.gameId!==game?.id) return;
-  musicHostState=state;
-  updateMusicSlideControls();
-}
-function startMusicHostStatusMonitor(){
-  if(musicHostStatusTimer) return;
-  musicHostStatusTimer=setInterval(updateMusicSlideControls,750);
 }
 
 function startQuestionTimer(cat){
@@ -159,9 +124,6 @@ function render(resetAutomation=true){
         ${timerMarkup(cat)}
         <div class="music-external-kicker">♫ MUSIC ROUND</div>
         <div class="music-external-question">QUESTION ${questionIndex+1}</div>
-        <div class="music-slide-controls">
-          <button class="music-slide-play-button" type="button" data-music-play aria-label="Play this slide's music clip"><span class="music-play-icon">▶</span><span class="music-play-label">PLAY MUSIC</span></button>
-        </div>
       </section>`;
     } else if(type==='picture'){
       stage.innerHTML=`<section class="slide picture-round-slide confetti-field ${item.question?'has-picture-prompt':''}" style="--slide-color:${color}">
@@ -239,7 +201,6 @@ function render(resetAutomation=true){
     nextBtn.querySelector('span').textContent='Restart Game';
   }
   broadcastPresenterState();
-  updateMusicSlideControls();
 }
 function next(){
   if(!valid()) return;
@@ -293,7 +254,6 @@ function back(){
 async function fullscreen(){ if(!document.fullscreenElement) await document.documentElement.requestFullscreen?.(); else await document.exitFullscreen?.(); }
 presenterChannel?.addEventListener('message',e=>{
   const msg=e.data||{};
-  if(msg.type==='music-player-state'){ applyMusicHostState(msg); return; }
   if(msg.type!=='presenter-command') return;
   if(msg.command==='next') next();
   if(msg.command==='back') back();
@@ -312,18 +272,10 @@ presenterChannel?.addEventListener('message',e=>{
   }
 });
 nextBtn.addEventListener('click',next); backBtn.addEventListener('click',back); fullscreenBtn.addEventListener('click',fullscreen);
-stage.addEventListener('click',e=>{
-  if(e.target.closest('[data-presenter-next]')) next();
-  if(e.target.closest('[data-music-play]')) sendMusicHostCommand('play');
-});
+stage.addEventListener('click',e=>{ if(e.target.closest('[data-presenter-next]')) next(); });
 document.addEventListener('keydown',e=>{
   if(['ArrowRight','Enter',' '].includes(e.key)){e.preventDefault();next();}
   if(e.key==='ArrowLeft'){e.preventDefault();back();}
   if(e.key.toLowerCase()==='f') fullscreen();
 });
-window.addEventListener('storage',e=>{
-  if(e.key===musicHostStateKey && e.newValue){try{applyMusicHostState(JSON.parse(e.newValue));}catch{}}
-});
-try{const savedHostState=JSON.parse(localStorage.getItem(musicHostStateKey)||'null');if(savedHostState)applyMusicHostState(savedHostState);}catch{}
-startMusicHostStatusMonitor();
 render();
