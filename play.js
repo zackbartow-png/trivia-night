@@ -10,7 +10,9 @@ let phase=(game?.announcements?.length?'pregame':'intro');
 let timerHandle=null, announcementHandle=null;
 let hostMusicCategoryIndex=null;
 const presenterStateKey=`triviaNightPresenterState:${gameId||'default'}`;
+const presenterCommandKey=`triviaNightPresenterCommand:${gameId||'default'}`;
 const presenterChannel=('BroadcastChannel' in window && gameId) ? new BroadcastChannel(`trivia-night-${gameId}`) : null;
+let lastPresenterCommandNonce='';
 
 const stage=document.querySelector('#stage');
 const gameName=document.querySelector('#gameName');
@@ -252,11 +254,13 @@ function back(){
   render();
 }
 async function fullscreen(){ if(!document.fullscreenElement) await document.documentElement.requestFullscreen?.(); else await document.exitFullscreen?.(); }
-presenterChannel?.addEventListener('message',e=>{
-  const msg=e.data||{};
-  if(msg.type!=='presenter-command') return;
-  if(msg.command==='next') next();
-  if(msg.command==='back') back();
+function handlePresenterCommand(msg){
+  if(!msg || msg.type!=='presenter-command') return;
+  if(msg.gameId && msg.gameId!==game?.id) return;
+  if(msg.nonce && msg.nonce===lastPresenterCommandNonce) return;
+  if(msg.nonce) lastPresenterCommandNonce=msg.nonce;
+  if(msg.command==='next'){ next(); return; }
+  if(msg.command==='back'){ back(); return; }
   if(msg.command==='music-question'){
     const targetCategory=Number(msg.categoryIndex);
     const targetQuestion=Number(msg.questionIndex);
@@ -269,6 +273,12 @@ presenterChannel?.addEventListener('message',e=>{
       hostMusicCategoryIndex=targetCategory;
       render();
     }
+  }
+}
+presenterChannel?.addEventListener('message',e=>handlePresenterCommand(e.data||{}));
+window.addEventListener('storage',e=>{
+  if(e.key===presenterCommandKey && e.newValue){
+    try{ handlePresenterCommand(JSON.parse(e.newValue)); }catch{}
   }
 });
 nextBtn.addEventListener('click',next); backBtn.addEventListener('click',back); fullscreenBtn.addEventListener('click',fullscreen);
