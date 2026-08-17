@@ -715,3 +715,19 @@ button { color: inherit; }
 @media (min-aspect-ratio: 16/10) and (min-width: 1000px) {
   .picture-round-slide { padding:78px 1vw 10px; }
 }
+
+/* Timer warning contrast fix: keep the final 5 seconds readable on every theme. */
+.presenter-page .question-timer.timer-warning {
+  background:#ffd84d !important;
+  border-color:#ff685f !important;
+  box-shadow:0 0 0 4px rgba(255,104,95,.16), 0 8px 22px rgba(16,42,86,.20);
+}
+.presenter-page .question-timer.timer-warning span,
+.presenter-page .question-timer.timer-warning small {
+  color:#102a56 !important;
+  text-shadow:none !important;
+  opacity:1 !important;
+}
+.presenter-page .question-timer.timer-warning small {
+  font-weight:1000;
+}
