@@ -1,7 +1,7 @@
 (function(global){
   'use strict';
   const PDF_W=792, PDF_H=612, SCALE=2, W=PDF_W*SCALE, H=PDF_H*SCALE;
-  const M=44, GAP=24, HEADER_H=106, CARD_GAP=18;
+  const M=44, GAP=24, HEADER_H=94, CARD_GAP=18;
   const CARD_W=(W-M*2-GAP)/2;
   const CARD_H=(H-HEADER_H-M-CARD_GAP)/2;
 
@@ -25,13 +25,20 @@
   function color(hex,fallback='#36a8f5'){ return /^#[0-9a-f]{6}$/i.test(hex||'')?hex:fallback; }
   function drawPageHeader(ctx,game,page){
     ctx.fillStyle='#fffaf0'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#102a56'; ctx.fillRect(0,0,W,72);
-    ctx.fillStyle='#fff'; ctx.textBaseline='middle'; ctx.font='900 29px Inter, Arial, sans-serif'; ctx.textAlign='left'; ctx.fillText('TRIVIA NIGHT — ANSWER SHEET',M,36);
-    const title=String(game.title||'Trivia Night'); const fs=fitText(ctx,title,570,25,16,800); ctx.font=`800 ${fs}px Inter, Arial, sans-serif`; ctx.textAlign='right'; ctx.fillText(title,W-M,36);
-    ctx.fillStyle='#102a56'; ctx.font='900 18px Inter, Arial, sans-serif'; ctx.textAlign='left'; ctx.fillText('TEAM NAME:',M,93);
-    ctx.strokeStyle='#9eacbd'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(M+125,94); ctx.lineTo(W-375,94); ctx.stroke();
-    ctx.font='800 15px Inter, Arial, sans-serif'; ctx.fillStyle='#697a96'; ctx.textAlign='right'; ctx.fillText(`PAGE ${page} OF 2`,W-190,93);
-    ctx.fillStyle='#08b7a7'; ctx.fillText('70 QUESTIONS',W-M,93);
+    const title=String(game.title||'Trivia Night');
+    const titleMax=Math.min(W*0.46,720);
+    const fs=fitText(ctx,title,titleMax,30,18,900);
+    ctx.textBaseline='middle'; ctx.fillStyle='#102a56';
+    ctx.font=`900 ${fs}px Inter, Arial, sans-serif`;
+    ctx.textAlign='right';
+    ctx.fillText(title,W-M,31);
+    if(page===1){
+      ctx.textAlign='left';
+      ctx.font='900 18px Inter, Arial, sans-serif';
+      ctx.fillText('TEAM NAME:',M,70);
+      ctx.strokeStyle='#9eacbd'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(M+125,71); ctx.lineTo(W*0.52,71); ctx.stroke();
+    }
   }
   function drawAnswerRows(ctx,x,y,w,h,accent){
     const top=y+102, bottom=y+h-20, rowH=(bottom-top)/10;
