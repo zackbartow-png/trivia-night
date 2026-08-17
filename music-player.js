@@ -79,14 +79,14 @@ function renderQueue({cue=true}={}){
   trackList.innerHTML=(cat.questions||[]).map((q,i)=>{
     const linked=Boolean(youtubeId(q.youtubeUrl));
     const start=clipIn(q),out=clipOut(q),clip=out?`Clip ${fmt(start)}–${fmt(out)}`:start?`Starts ${fmt(start)}`:'Full/manual clip';
-    return `<button class="track ${i===selectedQuestionIndex?'active':''}" data-q="${i}"><span class="qnum">${i+1}</span><span class="track-copy"><strong>${(q.answer||`Song ${i+1}`).replace(/[<>&]/g,'')}</strong><small>${linked?`${clip} · YouTube ready`:'No YouTube link added'}</small></span><span class="${linked?'linked':'missing'}">${linked?'✓':'!'}</span></button>`;
+    return `<button class="track ${i===selectedQuestionIndex?'active':''}" data-q="${i}"><span class="qnum">${i+1}</span><span class="track-copy"><strong>Song ${i+1}</strong><small>${linked?`${clip} · Ready`:'No YouTube link added'}</small></span><span class="${linked?'linked':'missing'}">${linked?'✓':'!'}</span></button>`;
   }).join('');
   updateTrackMeta(cue);
 }
 function updateTrackMeta(cue=true){
   const q=currentQuestion(); const id=youtubeId(q.youtubeUrl);
-  currentTrack.textContent=q.answer||`Song ${selectedQuestionIndex+1}`;
-  currentLink.textContent=q.youtubeUrl||'No YouTube link added for this song.';
+  currentTrack.textContent=`Song ${selectedQuestionIndex+1}`;
+  currentLink.textContent='';
   questionBadge.textContent=`QUESTION ${selectedQuestionIndex+1}`;
   updateClipRange(); renderActiveRow();
   if(cue && apiReady && id) cueVideo(id);
@@ -101,7 +101,7 @@ function playerCueObject(videoId){
 function createPlayer(videoId){
   playerShell.innerHTML='<div id="youtubePlayer"></div>';
   player=new YT.Player('youtubePlayer',{
-    width:'640',height:'360',videoId,
+    width:'360',height:'203',videoId,
     playerVars:{controls:1,playsinline:1,rel:0,origin:location.origin},
     events:{
       onReady:()=>{playerReady=true;setControls(true);currentVideoId=videoId;cueCurrentClip();startUiMonitor();},
