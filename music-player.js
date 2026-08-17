@@ -4,6 +4,7 @@ const stateKey=`triviaNightPresenterState:${gameId||'default'}`;
 let games=[]; try{games=JSON.parse(localStorage.getItem(STORAGE_KEY))||[];}catch{}
 let game=games.find(g=>g.id===gameId)||games[0];
 let player=null, apiReady=false, selectedCategoryIndex=0, selectedQuestionIndex=0, currentVideoId='', muted=false;
+let clipTimer=null, uiTimer=null, isScrubbing=false, playerReady=false;
 const channel=('BroadcastChannel' in window && game?.id)?new BroadcastChannel(`trivia-night-${game.id}`):null;
 
 const gameTitle=document.querySelector('#gameTitle');
@@ -17,9 +18,15 @@ const questionBadge=document.querySelector('#questionBadge');
 const presenterBackBtn=document.querySelector('#presenterBackBtn');
 const presenterNextBtn=document.querySelector('#presenterNextBtn');
 const syncStatus=document.querySelector('#syncStatus');
-const buttons=['playBtn','pauseBtn','restartBtn','back10Btn','forward10Btn','muteBtn'].reduce((a,id)=>(a[id]=document.querySelector('#'+id),a),{});
+const clipRange=document.querySelector('#clipRange');
+const currentTimeEl=document.querySelector('#currentTime');
+const durationEl=document.querySelector('#durationTime');
+const scrubber=document.querySelector('#trimScrubber');
+const inValue=document.querySelector('#inValue');
+const outValue=document.querySelector('#outValue');
+const clipDuration=document.querySelector('#clipDuration');
+const buttons=['playBtn','pauseBtn','restartBtn','back10Btn','forward10Btn','muteBtn','setInBtn','setOutBtn','clearOutBtn','goInBtn','goOutBtn'].reduce((a,id)=>(a[id]=document.querySelector('#'+id),a),{});
 
-function escText(s=''){return String(s);}
 function musicCategories(){return (game?.categories||[]).map((cat,index)=>({cat,index})).filter(x=>x.cat?.type==='music');}
 function youtubeId(input=''){
   const raw=String(input||'').trim(); if(!raw)return '';
@@ -37,8 +44,31 @@ function youtubeId(input=''){
   return '';
 }
 function currentQuestion(){return game?.categories?.[selectedCategoryIndex]?.questions?.[selectedQuestionIndex]||{};}
-function setControls(enabled){Object.values(buttons).forEach(b=>b.disabled=!enabled);}
-function renderQueue(){
+function clipIn(q=currentQuestion()){return Math.max(0,Number(q.youtubeIn)||0);}
+function clipOut(q=currentQuestion()){
+  const start=clipIn(q), out=Math.max(0,Number(q.youtubeOut)||0);
+  return out>start ? out : 0;
+}
+function fmt(seconds=0, tenths=false){
+  const n=Math.max(0,Number(seconds)||0);
+  const whole=Math.floor(n), h=Math.floor(whole/3600),m=Math.floor((whole%3600)/60),s=whole%60;
+  const base=h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;
+  return tenths?`${base}.${Math.floor((n-whole)*10)}`:base;
+}
+function setControls(enabled){
+  Object.values(buttons).forEach(b=>{if(b)b.disabled=!enabled;});
+  if(scrubber)scrubber.disabled=!enabled;
+}
+function updateClipRange(){
+  const q=currentQuestion(), start=clipIn(q), out=clipOut(q);
+  clipRange.textContent=`IN ${fmt(start)} · OUT ${out?fmt(out):'—'}`;
+  if(inValue) inValue.textContent=fmt(start,true);
+  if(outValue) outValue.textContent=out?fmt(out,true):'Not set';
+  if(clipDuration) clipDuration.textContent=out?fmt(Math.max(0,out-start),true):'Manual stop';
+  if(buttons.goOutBtn) buttons.goOutBtn.disabled=!playerReady || !out;
+  if(buttons.clearOutBtn) buttons.clearOutBtn.disabled=!playerReady || !out;
+}
+function renderQueue({cue=true}={}){
   if(!game){gameTitle.textContent='No game found';categorySelect.innerHTML='<option>No game found</option>';trackList.innerHTML='';return;}
   gameTitle.textContent=game.title||'Trivia Night'; presenterLink.href=`play.html?game=${encodeURIComponent(game.id)}`;
   const cats=musicCategories();
@@ -48,70 +78,185 @@ function renderQueue(){
   const cat=game.categories[selectedCategoryIndex];
   trackList.innerHTML=(cat.questions||[]).map((q,i)=>{
     const linked=Boolean(youtubeId(q.youtubeUrl));
-    return `<button class="track ${i===selectedQuestionIndex?'active':''}" data-q="${i}"><span class="qnum">${i+1}</span><span class="track-copy"><strong>${(q.answer||`Song ${i+1}`).replace(/[<>&]/g,'')}</strong><small>${linked?'YouTube link ready':'No YouTube link added'}</small></span><span class="${linked?'linked':'missing'}">${linked?'✓':'!'}</span></button>`;
+    const start=clipIn(q),out=clipOut(q),clip=out?`Clip ${fmt(start)}–${fmt(out)}`:start?`Starts ${fmt(start)}`:'Full/manual clip';
+    return `<button class="track ${i===selectedQuestionIndex?'active':''}" data-q="${i}"><span class="qnum">${i+1}</span><span class="track-copy"><strong>${(q.answer||`Song ${i+1}`).replace(/[<>&]/g,'')}</strong><small>${linked?`${clip} · YouTube ready`:'No YouTube link added'}</small></span><span class="${linked?'linked':'missing'}">${linked?'✓':'!'}</span></button>`;
   }).join('');
-  updateTrackMeta();
+  updateTrackMeta(cue);
 }
-function updateTrackMeta(){
+function updateTrackMeta(cue=true){
   const q=currentQuestion(); const id=youtubeId(q.youtubeUrl);
   currentTrack.textContent=q.answer||`Song ${selectedQuestionIndex+1}`;
   currentLink.textContent=q.youtubeUrl||'No YouTube link added for this song.';
   questionBadge.textContent=`QUESTION ${selectedQuestionIndex+1}`;
-  renderActiveRow();
-  if(apiReady && id) cueVideo(id);
-  else if(!id){currentVideoId='';setControls(false);}
+  updateClipRange(); renderActiveRow();
+  if(cue && apiReady && id) cueVideo(id);
+  else if(!id){currentVideoId='';playerReady=false;setControls(false);}
 }
-function renderActiveRow(){document.querySelectorAll('.track').forEach((el,i)=>el.classList.toggle('active',Number(el.dataset.q)===selectedQuestionIndex));}
+function renderActiveRow(){document.querySelectorAll('.track').forEach(el=>el.classList.toggle('active',Number(el.dataset.q)===selectedQuestionIndex));}
+function playerCueObject(videoId){
+  const q=currentQuestion(),start=clipIn(q),out=clipOut(q),obj={videoId,startSeconds:start};
+  if(out)obj.endSeconds=out;
+  return obj;
+}
 function createPlayer(videoId){
   playerShell.innerHTML='<div id="youtubePlayer"></div>';
   player=new YT.Player('youtubePlayer',{
     width:'640',height:'360',videoId,
     playerVars:{controls:1,playsinline:1,rel:0,origin:location.origin},
     events:{
-      onReady:()=>{setControls(true);currentVideoId=videoId;},
+      onReady:()=>{playerReady=true;setControls(true);currentVideoId=videoId;cueCurrentClip();startUiMonitor();},
+      onStateChange:e=>{
+        if(e.data===YT.PlayerState.PLAYING)startClipMonitor();else stopClipMonitor();
+        if(e.data===YT.PlayerState.CUED || e.data===YT.PlayerState.PAUSED || e.data===YT.PlayerState.PLAYING) updateTimeline(true);
+      },
       onError:e=>{syncStatus.innerHTML=`<strong>YouTube player:</strong> This video could not be loaded in the embedded player (error ${e.data}). Try another YouTube upload.`;}
     }
   });
 }
+function cueCurrentClip(){
+  const id=youtubeId(currentQuestion().youtubeUrl); if(!player||!id)return;
+  try{player.cueVideoById(playerCueObject(id));currentVideoId=id;playerReady=true;setControls(true);updateClipRange();}catch{}
+}
 function cueVideo(videoId){
   if(!videoId||!apiReady)return;
   if(!player){createPlayer(videoId);return;}
-  if(videoId===currentVideoId)return;
-  try{player.cueVideoById({videoId,startSeconds:0});currentVideoId=videoId;setControls(true);}catch{}
+  try{player.cueVideoById(playerCueObject(videoId));currentVideoId=videoId;playerReady=true;setControls(true);updateClipRange();}catch{}
 }
 window.onYouTubeIframeAPIReady=()=>{apiReady=true;const id=youtubeId(currentQuestion().youtubeUrl);if(id)cueVideo(id);};
 
+function getCurrent(){try{return Math.max(0,Number(player?.getCurrentTime?.()||0));}catch{return 0;}}
+function getDuration(){try{return Math.max(0,Number(player?.getDuration?.()||0));}catch{return 0;}}
+function updateTimeline(force=false){
+  if(!playerReady||!player)return;
+  const now=getCurrent(), dur=getDuration();
+  if(currentTimeEl)currentTimeEl.textContent=fmt(now,true);
+  if(durationEl)durationEl.textContent=dur?fmt(dur):'—';
+  if(scrubber&&dur>0){
+    scrubber.max=String(dur);
+    if(!isScrubbing||force)scrubber.value=String(Math.min(now,dur));
+  }
+}
+function startUiMonitor(){
+  stopUiMonitor();
+  uiTimer=setInterval(()=>updateTimeline(false),100);
+}
+function stopUiMonitor(){if(uiTimer){clearInterval(uiTimer);uiTimer=null;}}
+function startClipMonitor(){
+  stopClipMonitor();
+  clipTimer=setInterval(()=>{
+    if(!player)return;
+    const out=clipOut(); if(!out)return;
+    const now=getCurrent();
+    if(now>=out-.06){
+      player.pauseVideo?.();
+      player.seekTo?.(out,true);
+      stopClipMonitor();
+      updateTimeline(true);
+      syncStatus.innerHTML=`<strong>Clip complete:</strong> Reached OUT mark at ${fmt(out,true)}. Press Restart at IN to replay.`;
+    }
+  },80);
+}
+function stopClipMonitor(){if(clipTimer){clearInterval(clipTimer);clipTimer=null;}}
+function playClip(){
+  if(!player)return;
+  const start=clipIn(),out=clipOut(),now=getCurrent();
+  if(now<start-.3 || (out && now>=out-.08)) player.seekTo(start,true);
+  player.playVideo();
+}
+function restartClip(){
+  if(!player)return;
+  const start=clipIn();
+  player.seekTo(start,true);
+  player.playVideo();
+  syncStatus.innerHTML=`<strong>Clip restarted:</strong> Playing from IN ${fmt(start,true)}${clipOut()?` to OUT ${fmt(clipOut(),true)}`:''}.`;
+}
+function persistMarks(message){
+  if(!game)return;
+  game.updatedAt=new Date().toISOString();
+  const idx=games.findIndex(g=>g.id===game.id); if(idx>=0)games[idx]=game;
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(games));}catch{}
+  updateClipRange();
+  // Refresh only the queue labels. Do NOT re-cue or reload the video when a mark is saved.
+  renderQueue({cue:false});
+  if(message)syncStatus.innerHTML=message;
+}
+function setInHere(){
+  if(!playerReady||!player)return;
+  const q=currentQuestion(),time=Math.round(getCurrent()*10)/10;
+  q.youtubeIn=time;
+  if(Number(q.youtubeOut)||0){if(Number(q.youtubeOut)<=time+.1)q.youtubeOut=0;}
+  persistMarks(`<strong>IN mark saved:</strong> ${fmt(time,true)}. Now scrub forward and click Set OUT Here.`);
+}
+function setOutHere(){
+  if(!playerReady||!player)return;
+  const q=currentQuestion(),time=Math.round(getCurrent()*10)/10,start=clipIn(q);
+  if(time<=start+.2){syncStatus.innerHTML=`<strong>OUT mark not saved:</strong> Move past the IN mark (${fmt(start,true)}) first.`;return;}
+  q.youtubeOut=time;
+  persistMarks(`<strong>OUT mark saved:</strong> ${fmt(time,true)}. Your clip is ${fmt(time-start,true)} long. Press Play Clip to test it.`);
+}
+function clearOut(){
+  const q=currentQuestion(); q.youtubeOut=0;
+  persistMarks('<strong>OUT mark cleared:</strong> The song will continue until you pause or advance.');
+}
+function goTo(seconds){
+  if(!playerReady||!player)return;
+  player.seekTo(Math.max(0,Number(seconds)||0),true);
+  updateTimeline(true);
+}
 function selectTrack(qIndex,fromPresenter=false){
   selectedQuestionIndex=Math.max(0,Math.min(9,Number(qIndex)||0));
-  updateTrackMeta();
-  if(fromPresenter) syncStatus.innerHTML=`<strong>Presenter sync:</strong> Music Round question ${selectedQuestionIndex+1} is ready. Press Play when you want the music to start.`;
+  updateTrackMeta(true);
+  if(fromPresenter) syncStatus.innerHTML=`<strong>Presenter sync:</strong> Music Round question ${selectedQuestionIndex+1} is cued at its IN mark. Press Play Clip when ready.`;
 }
 function handlePresenterState(state){
   if(!state||state.type!=='presenter-state'||state.gameId!==game?.id)return;
   const cat=game.categories?.[state.categoryIndex];
   if(state.phase==='question' && cat?.type==='music'){
-    selectedCategoryIndex=state.categoryIndex; categorySelect.value=String(selectedCategoryIndex); renderQueue(); selectTrack(state.questionIndex,true);
+    selectedCategoryIndex=state.categoryIndex; categorySelect.value=String(selectedCategoryIndex); renderQueue({cue:false}); selectTrack(state.questionIndex,true);
   }else{
     const label=state.phase==='pass'?'Pass Your Papers':state.phase==='answers'?'Answers':state.phase==='intro'?`Category ${Number(state.categoryIndex)+1} intro`:state.phase;
     syncStatus.innerHTML=`<strong>Presenter sync:</strong> Presenter is currently on ${label}. The last music song remains cued here.`;
   }
 }
 
-categorySelect.addEventListener('change',()=>{selectedCategoryIndex=Number(categorySelect.value)||0;selectedQuestionIndex=0;renderQueue();updateTrackMeta();});
+categorySelect.addEventListener('change',()=>{selectedCategoryIndex=Number(categorySelect.value)||0;selectedQuestionIndex=0;renderQueue({cue:true});});
 trackList.addEventListener('click',e=>{const row=e.target.closest('[data-q]');if(row)selectTrack(Number(row.dataset.q),false);});
-buttons.playBtn.addEventListener('click',()=>player?.playVideo());
+buttons.playBtn.addEventListener('click',playClip);
 buttons.pauseBtn.addEventListener('click',()=>player?.pauseVideo());
-buttons.restartBtn.addEventListener('click',()=>{if(!player)return;player.seekTo(0,true);player.playVideo();});
-buttons.back10Btn.addEventListener('click',()=>{if(!player)return;player.seekTo(Math.max(0,(player.getCurrentTime?.()||0)-10),true);});
-buttons.forward10Btn.addEventListener('click',()=>{if(!player)return;const dur=player.getDuration?.()||1e9;player.seekTo(Math.min(dur,(player.getCurrentTime?.()||0)+10),true);});
+buttons.restartBtn.addEventListener('click',restartClip);
+buttons.back10Btn.addEventListener('click',()=>goTo(Math.max(clipIn(),getCurrent()-10)));
+buttons.forward10Btn.addEventListener('click',()=>{const out=clipOut(),dur=getDuration()||1e9,max=out||dur;goTo(Math.min(max,getCurrent()+10));});
 buttons.muteBtn.addEventListener('click',()=>{if(!player)return;muted=!muted;if(muted){player.mute();buttons.muteBtn.textContent='Unmute';}else{player.unMute();buttons.muteBtn.textContent='Mute';}});
+buttons.setInBtn.addEventListener('click',setInHere);
+buttons.setOutBtn.addEventListener('click',setOutHere);
+buttons.clearOutBtn.addEventListener('click',clearOut);
+buttons.goInBtn.addEventListener('click',()=>goTo(clipIn()));
+buttons.goOutBtn.addEventListener('click',()=>{if(clipOut())goTo(clipOut());});
+if(scrubber){
+  scrubber.addEventListener('pointerdown',()=>{isScrubbing=true;});
+  scrubber.addEventListener('input',()=>{
+    if(!playerReady||!player)return;
+    isScrubbing=true;
+    const t=Number(scrubber.value)||0;
+    if(currentTimeEl)currentTimeEl.textContent=fmt(t,true);
+    try{player.seekTo(t,false);}catch{}
+  });
+  scrubber.addEventListener('change',()=>{
+    if(!playerReady||!player)return;
+    const t=Number(scrubber.value)||0;
+    try{player.seekTo(t,true);}catch{}
+    isScrubbing=false;updateTimeline(true);
+  });
+  scrubber.addEventListener('pointerup',()=>{isScrubbing=false;updateTimeline(true);});
+}
 presenterBackBtn.addEventListener('click',()=>channel?.postMessage({type:'presenter-command',command:'back'}));
 presenterNextBtn.addEventListener('click',()=>channel?.postMessage({type:'presenter-command',command:'next'}));
 channel?.addEventListener('message',e=>handlePresenterState(e.data));
 window.addEventListener('storage',e=>{
   if(e.key===stateKey && e.newValue){try{handlePresenterState(JSON.parse(e.newValue));}catch{}}
-  if(e.key===STORAGE_KEY){try{games=JSON.parse(e.newValue)||[];game=games.find(g=>g.id===gameId)||games[0];renderQueue();}catch{}}
+  if(e.key===STORAGE_KEY){try{games=JSON.parse(e.newValue)||[];game=games.find(g=>g.id===gameId)||games[0];renderQueue({cue:false});}catch{}}
 });
+window.addEventListener('beforeunload',()=>{stopClipMonitor();stopUiMonitor();});
 
-renderQueue();
+renderQueue({cue:false});
 try{const state=JSON.parse(localStorage.getItem(stateKey)||'null');if(state)handlePresenterState(state);}catch{}
