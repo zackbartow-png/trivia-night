@@ -94,10 +94,10 @@ function render(resetAutomation=true){
       <div class="intro-logo"><span>TRIVIA</span><b>★ NIGHT ★</b></div>
       <div class="intro-label">UP NEXT</div>
       <h1 class="intro-category-name">${esc(name).toUpperCase()}</h1>
+      ${catDescription(cat)?`<div class="intro-description">(${esc(catDescription(cat).replace(/^\(+|\)+$/g,'').trim())})</div>`:''}
       <div class="intro-icon-wrap" style="--category-color:${color}"><div class="intro-icon">${icon}</div></div>
       <div class="intro-category-count">Category ${categoryIndex+1} of 7</div>
-      <div class="intro-subtitle">${esc(catDescription(cat)||roundDefaultSubtitle(cat))}</div>
-      ${timerEnabled(cat)?`<div class="intro-timer-note">⏱ ${timerSeconds(cat)} second auto-advance</div>`:''}
+      <div class="intro-subtitle">${esc(roundDefaultSubtitle(cat))}</div>
       <button class="intro-stage-button" data-presenter-next>START CATEGORY ▶</button>
       <div class="intro-start-cue">You can also use Right Arrow, Enter, or Space</div>
     </section>`;

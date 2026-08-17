@@ -312,6 +312,7 @@ button { color: inherit; }
 .intro-logo b { margin-top:5px; background:var(--teal); color:white; border-radius:6px 6px 11px 11px; padding:5px 15px; font-size:clamp(9px,.85vw,14px); letter-spacing:.12em; box-shadow:0 4px 0 rgba(8,183,167,.12); }
 .intro-label { margin-top:clamp(110px,15vh,165px); color:var(--teal); font-size:clamp(13px,1vw,17px); font-weight:1000; letter-spacing:.18em; }
 .intro-category-name { max-width:1120px; margin:8px 0 12px; font-size:clamp(58px,8vw,128px); line-height:.9; letter-spacing:-.055em; font-weight:1000; color:var(--navy); overflow-wrap:anywhere; }
+.intro-description { max-width:1000px; margin:-2px 0 12px; color:var(--navy-2); font-size:clamp(20px,2vw,32px); line-height:1.1; font-weight:900; letter-spacing:-.015em; }
 .intro-icon-wrap { width:clamp(120px,14vw,205px); height:clamp(120px,14vw,205px); border-radius:50%; display:grid; place-items:center; background:linear-gradient(180deg,color-mix(in srgb,var(--category-color,var(--sky)) 90%,white),var(--category-color,var(--sky))); box-shadow:0 14px 0 color-mix(in srgb,var(--category-color,var(--sky)) 18%,transparent), 0 22px 45px rgba(16,42,86,.13); position:relative; margin:8px 0 20px; }
 .intro-icon-wrap::before, .intro-icon-wrap::after { content:'—  —  —'; position:absolute; color:var(--gold); font-weight:1000; letter-spacing:15px; font-size:clamp(16px,2vw,28px); }
 .intro-icon-wrap::before { right:105%; transform:rotate(15deg); }
@@ -575,6 +576,71 @@ button { color: inherit; }
 .presenter-page[data-theme="retro"] .fullscreen-btn,
 .presenter-page[data-theme="chalk"] .fullscreen-btn { background:var(--paper); color:var(--navy); border-color:var(--line); }
 
+
+/* Theme-specific slide artwork. Decorative SVGs stay behind all slide content. */
+.presenter-page[data-theme="dark"] .confetti-field::before,
+.presenter-page[data-theme="dark"] .confetti-field::after,
+.presenter-page[data-theme="ocean"] .confetti-field::before,
+.presenter-page[data-theme="ocean"] .confetti-field::after,
+.presenter-page[data-theme="sunset"] .confetti-field::before,
+.presenter-page[data-theme="sunset"] .confetti-field::after,
+.presenter-page[data-theme="retro"] .confetti-field::before,
+.presenter-page[data-theme="retro"] .confetti-field::after,
+.presenter-page[data-theme="chalk"] .confetti-field::before,
+.presenter-page[data-theme="chalk"] .confetti-field::after {
+  content:""; width:clamp(120px,16vw,245px); height:clamp(120px,16vw,245px); letter-spacing:0; transform:none; opacity:.18; background-position:center; background-repeat:no-repeat; background-size:contain;
+}
+
+/* Dark Night: crescent moon + city skyline */
+.presenter-page[data-theme="dark"] .confetti-field::before {
+  top:5%; left:4%;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'%3E%3Ccircle cx='100' cy='92' r='58' fill='%23f7e9a9'/%3E%3Ccircle cx='128' cy='70' r='58' fill='%23142238'/%3E%3C/svg%3E");
+}
+.presenter-page[data-theme="dark"] .confetti-field::after {
+  right:3%; bottom:5%; width:clamp(180px,24vw,360px);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 180'%3E%3Cg fill='%2399b6d7'%3E%3Crect x='8' y='75' width='46' height='95' rx='3'/%3E%3Crect x='64' y='44' width='64' height='126' rx='3'/%3E%3Crect x='138' y='88' width='48' height='82' rx='3'/%3E%3Crect x='196' y='26' width='78' height='144' rx='3'/%3E%3Crect x='286' y='66' width='58' height='104' rx='3'/%3E%3C/g%3E%3Cg fill='%23f7e9a9'%3E%3Crect x='78' y='64' width='9' height='10'/%3E%3Crect x='100' y='88' width='9' height='10'/%3E%3Crect x='217' y='53' width='10' height='11'/%3E%3Crect x='244' y='82' width='10' height='11'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Ocean Blue: rolling wave + fish */
+.presenter-page[data-theme="ocean"] .confetti-field::before {
+  top:5%; left:3%;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 200'%3E%3Cpath d='M18 120c35-58 72-45 99-10 27 35 57 25 101-14-15 67-55 96-111 84-43-10-72-30-89-60z' fill='%2336a8f5'/%3E%3Cpath d='M30 135c35-25 64-18 85 2 23 22 52 19 89-8-31 55-112 61-174 6z' fill='%2308b7a7'/%3E%3C/svg%3E");
+}
+.presenter-page[data-theme="ocean"] .confetti-field::after {
+  right:4%; bottom:8%;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 180'%3E%3Cpath d='M54 88c38-42 94-45 132 0-38 42-94 45-132 0z' fill='%2308b7a7'/%3E%3Cpath d='M54 88 18 54v68z' fill='%2336a8f5'/%3E%3Ccircle cx='154' cy='78' r='7' fill='%23102a56'/%3E%3C/svg%3E");
+}
+
+/* Sunset: sun + palm tree */
+.presenter-page[data-theme="sunset"] .confetti-field::before {
+  top:4%; left:4%;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'%3E%3Ccircle cx='110' cy='110' r='62' fill='%23ffbf2f'/%3E%3Cg stroke='%23ff685f' stroke-width='10' stroke-linecap='round'%3E%3Cpath d='M110 15v28M110 177v28M15 110h28M177 110h28M43 43l20 20M157 157l20 20M177 43l-20 20M63 157l-20 20'/%3E%3C/g%3E%3C/svg%3E");
+}
+.presenter-page[data-theme="sunset"] .confetti-field::after {
+  right:3%; bottom:3%;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'%3E%3Cpath d='M116 205c-5-57-2-104 12-145' stroke='%23815b43' stroke-width='15' fill='none' stroke-linecap='round'/%3E%3Cg fill='%2308a898'%3E%3Cellipse cx='126' cy='54' rx='55' ry='17' transform='rotate(-8 126 54)'/%3E%3Cellipse cx='119' cy='65' rx='51' ry='15' transform='rotate(28 119 65)'/%3E%3Cellipse cx='131' cy='67' rx='51' ry='15' transform='rotate(-38 131 67)'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Retro Arcade: arcade cabinet + pixel alien */
+.presenter-page[data-theme="retro"] .confetti-field::before {
+  top:5%; left:3%; opacity:.22;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'%3E%3Cpath d='M54 24h112l16 58-12 114H48L38 82z' fill='%237b48d6' stroke='%2308e8de' stroke-width='8'/%3E%3Crect x='66' y='54' width='88' height='66' rx='7' fill='%23110d2b' stroke='%23ff4fd8' stroke-width='6'/%3E%3Ccircle cx='91' cy='151' r='10' fill='%23ffbf2f'/%3E%3Cpath d='M124 151h32' stroke='%2308e8de' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.presenter-page[data-theme="retro"] .confetti-field::after {
+  right:4%; bottom:6%; opacity:.25;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 180'%3E%3Cg fill='%2308e8de'%3E%3Crect x='60' y='35' width='20' height='20'/%3E%3Crect x='140' y='35' width='20' height='20'/%3E%3Crect x='80' y='55' width='60' height='20'/%3E%3Crect x='60' y='75' width='100' height='40'/%3E%3Crect x='40' y='95' width='20' height='40'/%3E%3Crect x='160' y='95' width='20' height='40'/%3E%3Crect x='80' y='115' width='20' height='30'/%3E%3Crect x='120' y='115' width='20' height='30'/%3E%3C/g%3E%3Cg fill='%23ff4fd8'%3E%3Crect x='82' y='82' width='16' height='16'/%3E%3Crect x='122' y='82' width='16' height='16'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Chalkboard: chalk light bulb + tic-tac-toe doodle */
+.presenter-page[data-theme="chalk"] .confetti-field::before {
+  top:4%; left:3%; opacity:.16;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'%3E%3Cg fill='none' stroke='%23f4f0db' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M70 92a42 42 0 1 1 74 27c-11 12-18 22-18 36H94c0-14-8-25-18-36A41 41 0 0 1 70 92z'/%3E%3Cpath d='M94 174h32M98 191h24'/%3E%3Cpath d='M110 20v20M38 92h20M162 92h20M56 38l14 14M164 38l-14 14'/%3E%3C/g%3E%3C/svg%3E");
+}
+.presenter-page[data-theme="chalk"] .confetti-field::after {
+  right:4%; bottom:6%; opacity:.15;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'%3E%3Cg stroke='%23f4f0db' stroke-width='8' stroke-linecap='round'%3E%3Cpath d='M75 35v150M145 35v150M35 75h150M35 145h150'/%3E%3Cpath d='M49 49l30 30M79 49 49 79M151 151l30 30M181 151l-30 30'/%3E%3C/g%3E%3Ccircle cx='111' cy='111' r='20' fill='none' stroke='%23ffbf2f' stroke-width='8'/%3E%3C/svg%3E");
+}
+
 /* Bigger progress label and timer */
 .slide-count { top:32px; right:34px; font-size:clamp(23px,2vw,34px); letter-spacing:.025em; }
 .question-timer { position:absolute; top:84px; right:34px; width:78px; height:78px; border-radius:50%; display:grid; place-items:center; align-content:center; background:color-mix(in srgb,var(--slide-color,var(--sky)) 12%,var(--presenter-stage,#fffefb)); border:3px solid var(--slide-color,var(--sky)); box-shadow:0 6px 18px rgba(16,42,86,.10); }
@@ -587,7 +653,8 @@ button { color: inherit; }
 .answer-grid { grid-template-columns:1fr 1fr; grid-template-rows:repeat(5,minmax(58px,1fr)); grid-auto-flow:column; gap:12px 20px; }
 .answer-row { min-height:58px; grid-template-columns:48px 1fr; padding:9px 14px 9px 9px; }
 .answer-number { width:38px; height:38px; font-size:17px; }
-.answer-text { font-size:clamp(21px,1.9vw,31px); line-height:1.08; font-weight:900; }
+.answer-text { font-size:clamp(21px,1.9vw,31px); line-height:1.08; font-weight:900; color:#111827 !important; }
+.answer-row { color:#111827 !important; background:#ffffff !important; }
 
 /* Imported media slides */
 .media-slide { padding:0; background:#080d16 !important; }
