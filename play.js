@@ -8,6 +8,8 @@ const game=games.find(g=>g.id===gameId)||games[0];
 let categoryIndex=0, questionIndex=0, announcementIndex=0;
 let phase=(game?.announcements?.length?'pregame':'intro');
 let timerHandle=null, announcementHandle=null;
+const presenterStateKey=`triviaNightPresenterState:${gameId||'default'}`;
+const presenterChannel=('BroadcastChannel' in window && gameId) ? new BroadcastChannel(`trivia-night-${gameId}`) : null;
 
 const stage=document.querySelector('#stage');
 const gameName=document.querySelector('#gameName');
@@ -34,6 +36,12 @@ function clearTimer(){ if(timerHandle){clearInterval(timerHandle);timerHandle=nu
 function clearAnnouncementLoop(){ if(announcementHandle){clearInterval(announcementHandle);announcementHandle=null;} }
 function clearAutomation(){ clearTimer(); clearAnnouncementLoop(); }
 function setTheme(){ document.body.dataset.theme=game?.theme||'party'; }
+function broadcastPresenterState(){
+  if(!game) return;
+  const payload={type:'presenter-state',gameId:game.id,phase,categoryIndex,questionIndex,updatedAt:Date.now()};
+  try { localStorage.setItem(presenterStateKey,JSON.stringify(payload)); } catch {}
+  try { presenterChannel?.postMessage(payload); } catch {}
+}
 
 function startQuestionTimer(cat){
   if(!timerEnabled(cat) || phase!=='question') return;
@@ -188,6 +196,7 @@ function render(resetAutomation=true){
     stage.innerHTML=`<section class="slide complete-slide confetti-field"><div class="complete-trophy">🏆</div><h1>TRIVIA<br><span>COMPLETE!</span></h1><p>Thanks for playing.</p></section>`;
     nextBtn.querySelector('span').textContent='Restart Game';
   }
+  broadcastPresenterState();
 }
 function next(){
   if(!valid()) return;
@@ -239,6 +248,12 @@ function back(){
   render();
 }
 async function fullscreen(){ if(!document.fullscreenElement) await document.documentElement.requestFullscreen?.(); else await document.exitFullscreen?.(); }
+presenterChannel?.addEventListener('message',e=>{
+  const msg=e.data||{};
+  if(msg.type!=='presenter-command') return;
+  if(msg.command==='next') next();
+  if(msg.command==='back') back();
+});
 nextBtn.addEventListener('click',next); backBtn.addEventListener('click',back); fullscreenBtn.addEventListener('click',fullscreen);
 stage.addEventListener('click',e=>{ if(e.target.closest('[data-presenter-next]')) next(); });
 document.addEventListener('keydown',e=>{

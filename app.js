@@ -233,7 +233,7 @@ const blankCategory = (i) => ({
   description: '',
   timerEnabled: false,
   timerSeconds: 30,
-  questions: Array.from({ length: 10 }, () => ({ question: '', answer: '', image: '' }))
+  questions: Array.from({ length: 10 }, () => ({ question: '', answer: '', image: '', youtubeUrl: '' }))
 });
 const blankBonus = () => ({ enabled: true, name: 'Bonus Round', question: '', answer: '' });
 const createBlankGame = () => ({
@@ -287,7 +287,8 @@ function normalizeGame(game) {
       questions: Array.from({length:10}, (_,qi) => ({
         question: source.questions?.[qi]?.question || '',
         answer: source.questions?.[qi]?.answer || '',
-        image: source.questions?.[qi]?.image || ''
+        image: source.questions?.[qi]?.image || '',
+        youtubeUrl: source.questions?.[qi]?.youtubeUrl || source.questions?.[qi]?.youtube || ''
       }))
     };
   });
@@ -357,7 +358,7 @@ function renderDashboard() {
         <div class="hero-accent">🏆</div>
         <div>
           <h2>Everything you need for trivia night.</h2>
-          <p>Build seven rounds using standard trivia, external-audio music, or picture rounds; add pre-game announcements, halftime, a theme, and an optional bonus round.</p>
+          <p>Build seven rounds using standard trivia, YouTube-linked music, or picture rounds; add pre-game announcements, halftime, a theme, and an optional bonus round.</p>
           <button class="ui-btn ui-btn-teal" data-action="new">＋ Build a Game</button>
         </div>
       </div>
@@ -371,7 +372,7 @@ function renderDashboard() {
     ${games.length ? `<div class="game-grid">${games.map(gameCard).join('')}</div>` : `
       <div class="empty-dashboard">
         <div class="big-icon">🎉</div><h2>Create your first Trivia Night</h2>
-        <p>Every game has 7 rounds of 10. Any round can be standard trivia, an external-audio Music Round, or a Picture Round, plus an optional one-question bonus round.</p>
+        <p>Every game has 7 rounds of 10. Any round can be standard trivia, a YouTube-linked Music Round, or a Picture Round, plus an optional one-question bonus round.</p>
         <button class="ui-btn ui-btn-primary" data-action="new">＋ Create New Game</button>
       </div>`}
   `;
@@ -450,7 +451,7 @@ function renderAIHelper(cat, isMusic) {
     ? `Gemini · ${esc(helperSuggestion.pool || aiDifficulty)}`
     : (isMusic ? 'Built-in song idea' : `Built-in · ${esc(helperSuggestion?.pool || '')}`);
   return `<div class="trivia-helper ai-trivia-helper" style="--helper-color:${cat.color}">
-    <div class="helper-head ai-helper-title"><div><span class="helper-kicker">✨ GEMINI ${isMusic?'MUSIC':'TRIVIA'} HELPER</span><strong>${isMusic?'Build your phone playlist faster':'Create questions for this category'}</strong></div><span class="ai-category-pill">${cat.icon} ${esc(cat.name)}</span></div>
+    <div class="helper-head ai-helper-title"><div><span class="helper-kicker">✨ GEMINI ${isMusic?'MUSIC':'TRIVIA'} HELPER</span><strong>${isMusic?'Build your music round faster':'Create questions for this category'}</strong></div><span class="ai-category-pill">${cat.icon} ${esc(cat.name)}</span></div>
     <div class="ai-helper-controls">
       <label class="ai-control-field"><span>Difficulty</span><select id="aiDifficulty" class="text-input">${difficultyOptions}</select></label>
       <label class="ai-control-field ai-focus-field"><span>Extra direction <small>(optional)</small></span><input id="aiFocus" class="text-input" value="${esc(aiFocus)}" placeholder="${isMusic?'Example: 1990s country, recognizable songs':'Example: 1990s only, no date questions'}"></label>
@@ -461,7 +462,7 @@ function renderAIHelper(cat, isMusic) {
       <button class="ui-btn ui-btn-small" data-action="helper-suggest" ${aiHelperLoading?'disabled':''}>Offline Suggestion</button>
     </div>
     ${aiHelperError ? `<div class="ai-helper-error">${esc(aiHelperError)}</div>` : ''}
-    ${helperSuggestion ? `<div class="helper-result"><span class="helper-match">${suggestionSource}</span>${isMusic?'':`<div class="helper-question">${esc(helperSuggestion.q)}</div>`}<div class="helper-answer"><b>${isMusic?'Song idea':'Answer'}:</b> ${esc(helperSuggestion.a)}</div><div class="helper-actions"><button class="ui-btn ui-btn-small ${helperSuggestion.source==='ai'?'ui-btn-primary':''}" data-action="${helperSuggestion.source==='ai'?'ai-generate':'helper-suggest'}">↻ Try Another</button><button class="ui-btn ui-btn-small ui-btn-teal" data-action="helper-use">✓ Use This ${isMusic?'Song':'Question'}</button></div></div>` : `<p class="helper-empty">${isMusic?'Gemini can suggest songs that match this round theme; you still play the music from your phone.':'Gemini automatically uses the category name. Add a specific theme above if you want a narrower question.'}</p>`}
+    ${helperSuggestion ? `<div class="helper-result"><span class="helper-match">${suggestionSource}</span>${isMusic?'':`<div class="helper-question">${esc(helperSuggestion.q)}</div>`}<div class="helper-answer"><b>${isMusic?'Song idea':'Answer'}:</b> ${esc(helperSuggestion.a)}</div><div class="helper-actions"><button class="ui-btn ui-btn-small ${helperSuggestion.source==='ai'?'ui-btn-primary':''}" data-action="${helperSuggestion.source==='ai'?'ai-generate':'helper-suggest'}">↻ Try Another</button><button class="ui-btn ui-btn-small ui-btn-teal" data-action="helper-use">✓ Use This ${isMusic?'Song':'Question'}</button></div></div>` : `<p class="helper-empty">${isMusic?'Gemini can suggest songs that match this round theme. After choosing a song, paste its YouTube link into the song editor.':'Gemini automatically uses the category name. Add a specific theme above if you want a narrower question.'}</p>`}
     <div class="ai-helper-footnote"><span>Gemini-generated content should be reviewed before game night.</span><span>Offline Suggestion works without an API connection.</span></div>
   </div>`;
 }
@@ -609,9 +610,11 @@ function renderEditor() {
       <h2>${cat.icon} ${esc(cat.name)} · ${isMusic?'Song':isPicture?'Picture':'Question'} ${activeQuestion+1}</h2>
       ${(!isPicture ? renderAIHelper(cat,isMusic) : '')}
       ${isMusic ? `
-        <div class="external-music-callout"><div class="external-music-icon">📱</div><div><strong>Play the music from your phone</strong><span>Arrange your phone playlist in Question 1–10 order. Trivia Night handles the visual round only; your phone handles the music.</span></div></div>
+        <div class="external-music-callout"><div class="external-music-icon">▶</div><div><strong>YouTube host player</strong><span>Paste a YouTube link for each song. The video stays in a separate host-only player window; the projector continues to show only QUESTION 1–10.</span></div></div>
+        <div class="form-field"><label>YouTube Link for Song ${activeQuestion+1}</label><input id="youtubeUrlInput" class="text-input" value="${esc(q.youtubeUrl || '')}" placeholder="https://www.youtube.com/watch?v=..."></div>
         <div class="form-field"><label>Answer for Song ${activeQuestion+1}</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="Example: Take on Me — a-ha"></div>
-        <p class="music-editor-help">During the round, the projector displays only <strong>QUESTION ${activeQuestion+1}</strong>. The answer remains hidden until the 1–10 answer slide.</p>
+        <div class="music-host-actions"><a class="ui-btn ui-btn-primary" href="music-player.html?game=${encodeURIComponent(game.id)}" target="_blank">♫ Open Host Music Player</a></div>
+        <p class="music-editor-help">The host player keeps the standard YouTube player visible on your laptop. <strong>Do not project that window.</strong> The audience-facing presenter still displays only <strong>QUESTION ${activeQuestion+1}</strong>. The answer remains hidden until the 1–10 answer slide.</p>
       ` : isPicture ? `
         <div class="picture-round-callout"><div>🖼️</div><div><strong>Picture Round</strong><span>Upload the image the audience should identify. The answer stays hidden until the answer slide.</span></div></div>
         <div class="form-field"><label>Picture ${activeQuestion+1}</label><input id="pictureImageInput" class="text-input file-input" type="file" accept="image/*"></div>
@@ -657,6 +660,7 @@ function renderEditor() {
           <label class="ui-btn" for="importFile">⇧ Import Game</label>
           <button class="ui-btn" data-action="export">⇩ Export .trivia</button>
           <button class="ui-btn" data-action="answer-pdf">PDF Answer Sheets</button>
+          <a class="ui-btn" href="music-player.html?game=${encodeURIComponent(game.id)}" target="_blank">♫ Host Music Player</a>
           <a class="ui-btn ui-btn-primary" href="play.html?game=${encodeURIComponent(game.id)}" target="_blank">▶ Start Presenter</a>
         </div>
       </div>
@@ -691,8 +695,8 @@ function renderCategoryModal() {
         <div class="modal-header"><div><div class="panel-title">CATEGORY ${activeCategory+1} OF 7</div><h2>Edit Category</h2></div><button class="modal-close" data-action="category-cancel" aria-label="Close">×</button></div>
         <div class="form-field"><label>Category Name</label><input id="categoryDraftName" class="text-input" maxlength="42" value="${esc(categoryDraft.name)}" placeholder="Category name"></div>
         <div class="form-field"><label>Round Description / Note <span class="optional-label">(shown on intro slide)</span></label><input id="categoryDraftDescription" class="text-input" maxlength="110" value="${esc(categoryDraft.description)}" placeholder="Example: Song / Artist, Name the logo, Multiple choice..."></div>
-        <div class="form-field"><label>Round Type</label><select id="categoryDraftType" class="text-input"><option value="standard" ${categoryDraft.type==='standard'?'selected':''}>Standard Trivia</option><option value="music" ${categoryDraft.type==='music'?'selected':''}>♫ Music Round — External Audio</option><option value="picture" ${categoryDraft.type==='picture'?'selected':''}>🖼️ Picture Round</option></select></div>
-        <div class="music-modal-note" ${categoryDraft.type==='music'?'':'hidden'}>📱 Music is played separately from your phone/Bluetooth speaker. Trivia Night displays QUESTION 1–10 and the answers.</div>
+        <div class="form-field"><label>Round Type</label><select id="categoryDraftType" class="text-input"><option value="standard" ${categoryDraft.type==='standard'?'selected':''}>Standard Trivia</option><option value="music" ${categoryDraft.type==='music'?'selected':''}>♫ Music Round — YouTube Host Player</option><option value="picture" ${categoryDraft.type==='picture'?'selected':''}>🖼️ Picture Round</option></select></div>
+        <div class="music-modal-note" ${categoryDraft.type==='music'?'':'hidden'}>▶ Add one YouTube link per song. The video plays in the separate Host Music Player window while the projector displays only QUESTION 1–10 and the answers.</div>
         <div class="music-modal-note picture-modal-note" ${categoryDraft.type==='picture'?'':'hidden'}>🖼️ Upload one image for each of the 10 picture questions. The image appears on the projector; the answer stays hidden.</div>
         <div class="timer-setting-row"><label class="timer-toggle"><input id="categoryDraftTimerEnabled" type="checkbox" ${categoryDraft.timerEnabled?'checked':''}><span><strong>Question Timer + Auto Advance</strong><small>Automatically move to the next question when time expires. Pass Your Papers always stays manual.</small></span></label><label class="timer-seconds">Seconds<input id="categoryDraftTimerSeconds" class="text-input" type="number" min="5" max="300" step="5" value="${categoryDraft.timerSeconds||30}" ${categoryDraft.timerEnabled?'':'disabled'}></label></div>
         <div class="form-field"><label>Category Color</label><div class="color-picker">${COLOR_LIBRARY.map(color => `<button class="color-swatch ${color.toLowerCase()===categoryDraft.color.toLowerCase()?'selected':''}" style="--swatch:${color}" data-action="pick-color" data-color="${color}" title="${color}" aria-label="Choose color ${color}"></button>`).join('')}</div></div>
@@ -743,7 +747,7 @@ function deleteGame() {
 }
 function clearQuestion() {
   const game=selectedGame(); if (!game) return;
-  game.categories[activeCategory].questions[activeQuestion]={question:'',answer:'',image:''};
+  game.categories[activeCategory].questions[activeQuestion]={question:'',answer:'',image:'',youtubeUrl:''};
   touch(game,'Cleared'); renderEditor();
 }
 function clearBonus() {
@@ -800,6 +804,7 @@ function saveActiveField(target) {
   if (target.id==='gameTitle') game.title=target.value;
   if (target.id==='questionInput') q.question=target.value;
   if (target.id==='answerInput') q.answer=target.value;
+  if (target.id==='youtubeUrlInput') q.youtubeUrl=target.value.trim();
   if (target.id==='bonusNameInput') game.bonus.name=target.value;
   if (target.id==='bonusQuestionInput') game.bonus.question=target.value;
   if (target.id==='bonusAnswerInput') game.bonus.answer=target.value;
@@ -812,7 +817,7 @@ function saveActiveField(target) {
   if (target.id==='categoryDraftTimerSeconds' && categoryDraft) { categoryDraft.timerSeconds=Math.min(300,Math.max(5,Number(target.value)||30)); return; }
   if (target.id==='aiDifficulty') { aiDifficulty=target.value || 'medium'; return; }
   if (target.id==='aiFocus') { aiFocus=target.value; return; }
-  if (!['gameTitle','questionInput','answerInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput'].includes(target.id)) return;
+  if (!['gameTitle','questionInput','answerInput','youtubeUrlInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput'].includes(target.id)) return;
   touch(game);
   if (target.id==='questionInput' || target.id==='bonusQuestionInput') { const preview=document.querySelector('.mini-question'); if(preview) preview.textContent=target.value || (activeBonus ? 'Your bonus question will appear here.' : 'Your question will appear here.'); }
 }

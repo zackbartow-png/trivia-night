@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Trivia Night · Host Music Player</title>
+  <style>
+    :root{--navy:#102d50;--blue:#2b9ce6;--teal:#08b7a7;--gold:#ffbf2f;--coral:#ff685f;--ink:#23364c;--muted:#6d7f92;--line:#d9e2ec;--panel:#fff;--bg:#f4f8fc}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    header{background:#fff;border-bottom:1px solid var(--line);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:5}
+    .brand{font-weight:1000;font-size:23px;color:var(--navy);letter-spacing:-.7px}.brand span{background:var(--teal);color:#fff;border-radius:8px;padding:3px 8px;margin-left:4px}
+    .head-actions{display:flex;gap:9px;flex-wrap:wrap}.btn{border:1px solid #cad6e2;background:#fff;color:var(--navy);font-weight:800;border-radius:10px;padding:10px 13px;cursor:pointer;text-decoration:none}.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+    .warning{margin:18px auto 0;max-width:1180px;background:#fff7d8;border:1px solid #edc858;color:#5c4710;border-radius:12px;padding:12px 16px;font-weight:800}
+    main{max-width:1180px;margin:18px auto 40px;padding:0 18px;display:grid;grid-template-columns:minmax(540px,1.35fr) minmax(310px,.65fr);gap:18px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px rgba(35,54,76,.08);padding:18px}
+    .eyebrow{font-size:12px;font-weight:1000;letter-spacing:1.4px;color:var(--blue);text-transform:uppercase}.title{font-size:24px;font-weight:1000;color:var(--navy);margin:5px 0 3px}.sub{color:var(--muted);font-size:14px;line-height:1.45}
+    .player-shell{margin-top:16px;background:#000;border-radius:12px;overflow:hidden;min-height:315px;display:flex;align-items:center;justify-content:center}.player-shell iframe{display:block;width:100%;aspect-ratio:16/9;min-height:270px}.empty-player{color:#dfe8f0;text-align:center;padding:40px;line-height:1.5}
+    .track-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-top:14px}.track-answer{font-size:20px;font-weight:1000;color:var(--navy)}.track-link{font-size:12px;color:var(--muted);word-break:break-all;margin-top:4px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.controls button{border:1px solid #c9d5e1;background:#fff;color:var(--navy);font-weight:900;border-radius:10px;padding:10px 13px;cursor:pointer}.controls button.play{background:var(--teal);border-color:var(--teal);color:#fff}.controls button:disabled{opacity:.45;cursor:not-allowed}
+    .sync{margin-top:13px;padding:11px 12px;border-radius:10px;background:#eef8ff;border:1px solid #c8e4f7;font-size:13px;line-height:1.4}.sync strong{color:var(--navy)}
+    label{display:block;font-size:12px;font-weight:900;color:#516579;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.6px}select{width:100%;padding:10px;border-radius:9px;border:1px solid #cbd7e2;background:#fff;font-weight:800;color:var(--navy)}
+    .tracks{display:grid;gap:8px;margin-top:13px}.track{width:100%;text-align:left;border:1px solid #d7e0e9;background:#fff;border-radius:11px;padding:10px 11px;cursor:pointer;display:grid;grid-template-columns:38px 1fr 22px;align-items:center;gap:8px}.track:hover{background:#f6fbff}.track.active{border:2px solid var(--teal);background:#effcf9}.qnum{width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:1000}.track-copy strong{display:block;color:var(--navy);font-size:13px}.track-copy small{display:block;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.linked{color:var(--teal);font-weight:1000}.missing{color:#c55248;font-weight:1000}
+    .policy-note{margin-top:16px;border-top:1px solid var(--line);padding-top:13px;font-size:12px;line-height:1.45;color:var(--muted)}
+    @media(max-width:900px){main{grid-template-columns:1fr}.player-shell{min-height:270px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">TRIVIA <span>NIGHT</span> · HOST MUSIC</div>
+    <div class="head-actions"><button id="presenterBackBtn" class="btn">← Presenter Back</button><button id="presenterNextBtn" class="btn primary">Presenter Next →</button><a id="presenterLink" class="btn" target="_blank">Open Presenter</a><a class="btn" href="index.html">Game Manager</a></div>
+  </header>
+  <div class="warning">HOST-ONLY WINDOW — Keep this window on your laptop. Do not place it on the projector. The audience presenter never contains the YouTube video.</div>
+  <main>
+    <section class="card">
+      <div class="eyebrow">YouTube Player</div>
+      <div id="gameTitle" class="title">Trivia Night</div>
+      <div class="sub">The standard YouTube player remains visible here for the host. Use the presenter window separately for the audience.</div>
+      <div id="playerShell" class="player-shell"><div class="empty-player">Add a YouTube link to a Music Round song, save the game, then reopen or refresh this player.</div></div>
+      <div class="track-meta"><div><div id="currentTrack" class="track-answer">No song selected</div><div id="currentLink" class="track-link"></div></div><div id="questionBadge" class="eyebrow">—</div></div>
+      <div class="controls">
+        <button id="playBtn" class="play" disabled>▶ Play</button><button id="pauseBtn" disabled>Ⅱ Pause</button><button id="restartBtn" disabled>↺ Restart</button><button id="back10Btn" disabled>−10 sec</button><button id="forward10Btn" disabled>+10 sec</button><button id="muteBtn" disabled>Mute</button>
+      </div>
+      <div id="syncStatus" class="sync"><strong>Presenter sync:</strong> Waiting for the presenter. When a Music Round question appears, this window will automatically cue the matching video. Playback still starts when the host presses Play.</div>
+      <div class="policy-note">YouTube playback stays in the visible embedded player in this host window. The app does not extract audio, hide the YouTube player, cover it, or play it in the background.</div>
+    </section>
+    <aside class="card">
+      <div class="eyebrow">Music Round Queue</div>
+      <label for="categorySelect">Music Category</label><select id="categorySelect"></select>
+      <div id="trackList" class="tracks"></div>
+    </aside>
+  </main>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="music-player.js"></script>
+</body>
+</html>
