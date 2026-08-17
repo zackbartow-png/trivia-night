@@ -3,22 +3,31 @@ const SELECTED_KEY = 'triviaNightSelectedGameV1';
 
 const DEFAULT_ICONS = ['🍿','⚾','🎵','🏛️','🍕','🧪','❓'];
 const DEFAULT_COLORS = ['#36a8f5','#08b7a7','#ff685f','#ffbf2f','#9465df','#1fc8c0','#f2a31c'];
-const COLOR_LIBRARY = ['#36a8f5','#08b7a7','#ff685f','#ffbf2f','#9465df','#ef5da8','#1fc8c0','#f28c28','#5d7df5','#72bf44'];
+const COLOR_LIBRARY = [
+  '#36a8f5','#1d8fe1','#0057b8','#5d7df5','#6c63ff','#9465df','#b65cff','#ef5da8',
+  '#ff4f8b','#ff685f','#e64b3c','#f28c28','#f2a31c','#ffbf2f','#ffd84d','#72bf44',
+  '#33a852','#08b7a7','#00a58f','#1fc8c0','#39c6d8','#607d8b','#7c6657','#1d2d50'
+];
 const ICON_LIBRARY = [
-  '🍿','🎬','🎞️','📺','🪑',
-  '🎵','🎤','🎸','🎧','📻',
-  '⚾','🏈','🏀','⚽','🎾',
-  '🏒','⛳','🎳','🥊','🏎️',
-  '🍕','🍔','☕','🍸','🍦',
-  '🌮','🍩','🍎','🍷','🥨',
-  '🧪','⚛️','🚀','⚡','🔭',
-  '🧬','💡','🩺','🌡️','🤖',
-  '🏛️','👑','🌍','📍','🏔️',
-  '🗺️','✈️','🚢','🏰','🗽',
-  '🏆','🐾','📚','🎮','🎲',
-  '❓','⭐','🧠','📷','🪄',
-  '💻','💰','🚗','🐶','🐱',
-  '🌲','🌊','☀️','👻','🎄'
+  '🍿','🎬','🎞️','📺','🪑','🎭','🎟️','📽️','🎥','🏆',
+  '🎵','🎤','🎸','🎧','📻','🎹','🥁','🎷','🎺','🪕',
+  '⚾','🏈','🏀','⚽','🎾','🏒','⛳','🎳','🥊','🏎️','🏐','🏓','🏸','🥅','🏅',
+  '🍕','🍔','☕','🍸','🍦','🌮','🍩','🍎','🍷','🥨','🍺','🍰','🌶️','🥓','🍣',
+  '🧪','⚛️','🚀','⚡','🔭','🧬','💡','🩺','🌡️','🤖','🧲','🔬','🧠','🦠','🪐',
+  '🏛️','👑','🌍','📍','🏔️','🗺️','✈️','🚢','🏰','🗽','🌎','🌋','🏜️','🏝️','🧭',
+  '📚','✏️','📰','📝','🔤','🎨','🖼️','📷','📸','🧩','🎮','🎲','🃏','♟️','🎯',
+  '🐾','🐶','🐱','🦁','🐯','🐻','🦊','🐸','🦈','🐬','🦅','🦉','🐴','🐮','🦖',
+  '💻','📱','⌚','💾','💿','📡','🛰️','🔌','💰','💵','🚗','🚂','🚁','🛠️','⚙️',
+  '🌲','🌊','☀️','🌙','⭐','🌈','❄️','🔥','👻','🎄','🎃','❤️','💀','👽','🪄',
+  '❓','❗','💯','🔔','🕰️','📅','🎁','🧁','👀','🗣️','👥','🎉','🥳','🏁','🔑'
+];
+const THEME_LIBRARY = [
+  {id:'party', name:'Bright Party', desc:'The original bright projector-friendly look.'},
+  {id:'dark', name:'Dark Night', desc:'Dark navy stage with bright text and accents.'},
+  {id:'ocean', name:'Ocean Blue', desc:'Cool blue background with a clean light stage.'},
+  {id:'sunset', name:'Sunset', desc:'Warm peach and coral background.'},
+  {id:'retro', name:'Retro Arcade', desc:'Purple/blue retro background with grid accents.'},
+  {id:'chalk', name:'Chalkboard', desc:'Dark green chalkboard-inspired background.'}
 ];
 
 
@@ -221,14 +230,22 @@ const blankCategory = (i) => ({
   icon: DEFAULT_ICONS[i],
   color: DEFAULT_COLORS[i],
   type: 'standard',
-  questions: Array.from({ length: 10 }, () => ({ question: '', answer: '' }))
+  description: '',
+  timerEnabled: false,
+  timerSeconds: 30,
+  questions: Array.from({ length: 10 }, () => ({ question: '', answer: '', image: '' }))
 });
-const blankBonus = () => ({ enabled: true, question: '', answer: '' });
+const blankBonus = () => ({ enabled: true, name: 'Bonus Round', question: '', answer: '' });
 const createBlankGame = () => ({
   id: makeId(),
   title: `Trivia Night — ${new Date().toLocaleDateString()}`,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
+  theme: 'party',
+  announcementSeconds: 8,
+  announcements: [],
+  halftimeImage: '',
+  halftimeName: '',
   categories: Array.from({ length: 7 }, (_, i) => blankCategory(i)),
   bonus: blankBonus()
 });
@@ -241,6 +258,7 @@ let activeBonus = false;
 let currentView = 'dashboard';
 let categoryModalOpen = false;
 let categoryDraft = null;
+let presentationModalOpen = false;
 let helperSuggestion = null;
 let aiHelperLoading = false;
 let aiHelperError = '';
@@ -257,32 +275,51 @@ function normalizeGame(game) {
   game.categories = Array.from({length:7}, (_,ci) => {
     const fallback = blankCategory(ci);
     const source = game.categories?.[ci] || fallback;
+    const type = ['standard','music','picture'].includes(source.type) ? source.type : 'standard';
     return {
       name: source.name || `Category ${ci+1}`,
       icon: ICON_LIBRARY.includes(source.icon) ? source.icon : DEFAULT_ICONS[ci],
       color: sanitizeColor(source.color, DEFAULT_COLORS[ci]),
-      type: source.type === 'music' ? 'music' : 'standard',
+      type,
+      description: source.description || '',
+      timerEnabled: Boolean(source.timerEnabled),
+      timerSeconds: Math.min(300, Math.max(5, Number(source.timerSeconds) || 30)),
       questions: Array.from({length:10}, (_,qi) => ({
         question: source.questions?.[qi]?.question || '',
-        answer: source.questions?.[qi]?.answer || ''
+        answer: source.questions?.[qi]?.answer || '',
+        image: source.questions?.[qi]?.image || ''
       }))
     };
   });
   const sourceBonus = game.bonus || {};
   game.bonus = {
     enabled: typeof sourceBonus.enabled === 'boolean' ? sourceBonus.enabled : false,
+    name: sourceBonus.name || 'Bonus Round',
     question: sourceBonus.question || '',
     answer: sourceBonus.answer || ''
   };
+  game.theme = THEME_LIBRARY.some(t=>t.id===game.theme) ? game.theme : 'party';
+  game.announcementSeconds = Math.min(60, Math.max(2, Number(game.announcementSeconds) || 8));
+  game.announcements = Array.isArray(game.announcements) ? game.announcements.filter(x=>x && x.image).map(x=>({id:x.id||makeId(), image:x.image, name:x.name||'Announcement'})).slice(0,12) : [];
+  game.halftimeImage = game.halftimeImage || '';
+  game.halftimeName = game.halftimeName || '';
   return game;
 }
 function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(games));
-  if (selectedId) localStorage.setItem(SELECTED_KEY, selectedId);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(games));
+    if (selectedId) localStorage.setItem(SELECTED_KEY, selectedId);
+    return true;
+  } catch (error) {
+    console.error(error);
+    const el=document.querySelector('#status');
+    if(el) el.textContent='Storage full — remove or replace some uploaded images.';
+    return false;
+  }
 }
 function selectedGame() { return games.find(g => g.id === selectedId); }
 function esc(str='') { return String(str).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
-function categoryFilled(cat) { return cat.questions.filter(q => cat.type === 'music' ? q.answer.trim() : (q.question.trim() && q.answer.trim())).length; }
+function categoryFilled(cat) { return cat.questions.filter(q => cat.type === 'music' ? q.answer.trim() : cat.type === 'picture' ? (q.image && q.answer.trim()) : (q.question.trim() && q.answer.trim())).length; }
 function filledCount(game) { return game?.categories.reduce((sum,c) => sum + categoryFilled(c), 0) || 0; }
 function formattedDate(value) { try { return new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); } catch { return ''; } }
 function setStatus(text='Saved') {
@@ -306,7 +343,7 @@ function setView(view) {
     subtitle.textContent = 'Create, manage, and launch your trivia nights.';
   } else {
     title.textContent = 'Game Editor';
-    subtitle.textContent = 'Build 7 rounds of 10 questions or songs, plus an optional final bonus round.';
+    subtitle.textContent = 'Build 7 rounds of 10, including trivia, music, or picture rounds, plus an optional final bonus round.';
   }
 }
 
@@ -320,7 +357,7 @@ function renderDashboard() {
         <div class="hero-accent">🏆</div>
         <div>
           <h2>Everything you need for trivia night.</h2>
-          <p>Build seven rounds, make any round a 10-song Music Round, add an optional final bonus question, then launch the projector-friendly presenter.</p>
+          <p>Build seven rounds using standard trivia, external-audio music, or picture rounds; add pre-game announcements, halftime, a theme, and an optional bonus round.</p>
           <button class="ui-btn ui-btn-teal" data-action="new">＋ Build a Game</button>
         </div>
       </div>
@@ -334,7 +371,7 @@ function renderDashboard() {
     ${games.length ? `<div class="game-grid">${games.map(gameCard).join('')}</div>` : `
       <div class="empty-dashboard">
         <div class="big-icon">🎉</div><h2>Create your first Trivia Night</h2>
-        <p>Every game has 7 rounds of 10. Any round can be standard trivia or an external-audio Music Round, plus an optional one-question bonus round.</p>
+        <p>Every game has 7 rounds of 10. Any round can be standard trivia, an external-audio Music Round, or a Picture Round, plus an optional one-question bonus round.</p>
         <button class="ui-btn ui-btn-primary" data-action="new">＋ Create New Game</button>
       </div>`}
   `;
@@ -353,7 +390,7 @@ function gameCard(g) {
           <div class="game-date">Updated ${formattedDate(g.updatedAt)}</div>
         </div>
       </div>
-      <div class="category-chips">${g.categories.map(c => `<span class="cat-chip" style="--chip-color:${c.color}"><b>${c.icon}</b>${esc(c.name)}${c.type==='music'?' ♫':''}</span>`).join('')}<span class="cat-chip bonus-chip ${g.bonus?.enabled?'bonus-on':'bonus-off'}"><b>⭐</b>Bonus ${g.bonus?.enabled?'On':'Off'}</span></div>
+      <div class="category-chips">${g.categories.map(c => `<span class="cat-chip" style="--chip-color:${c.color}"><b>${c.icon}</b>${esc(c.name)}${c.type==='music'?' ♫':c.type==='picture'?' 🖼️':''}</span>`).join('')}<span class="cat-chip bonus-chip ${g.bonus?.enabled?'bonus-on':'bonus-off'}"><b>⭐</b>Bonus ${g.bonus?.enabled?'On':'Off'}</span></div>
       <div class="game-progress-wrap">
         <div class="game-progress">${filled}/70 questions/songs complete</div>
         <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -473,6 +510,33 @@ async function generateAIHelper(fillEmpty=false) {
   }
 }
 
+function roundTypeLabel(cat){ return cat.type==='music'?'Music Round':cat.type==='picture'?'Picture Round':'Trivia Round'; }
+function defaultRoundDescription(cat){
+  if(cat.type==='music') return '♫ Music Round · 10 songs';
+  if(cat.type==='picture') return '🖼️ Picture Round · 10 images';
+  return 'Get ready for 10 questions!';
+}
+function compressImageFile(file, maxW=1280, maxH=900, quality=.8){
+  return new Promise((resolve,reject)=>{
+    if(!file || !file.type?.startsWith('image/')) return reject(new Error('Please choose an image file.'));
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Could not read that image.'));
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('Could not open that image.'));
+      img.onload=()=>{
+        const scale=Math.min(1,maxW/img.width,maxH/img.height);
+        const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+        const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+        const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function renderEditor() {
   const game = selectedGame();
   const host = document.querySelector('#editorView');
@@ -480,32 +544,35 @@ function renderEditor() {
   const cat = game.categories[activeCategory];
   const q = cat.questions[activeQuestion];
   const isMusic = cat.type === 'music';
+  const isPicture = cat.type === 'picture';
   const bonus = game.bonus || blankBonus();
   const activeIcon = activeBonus ? '⭐' : cat.icon;
   const activeColor = activeBonus ? '#f2a31c' : cat.color;
+  const themeName=THEME_LIBRARY.find(t=>t.id===game.theme)?.name || 'Bright Party';
 
-  const tabs = `${game.categories.map((c,i)=>`<button class="category-tab ${!activeBonus && i===activeCategory?'active':''}" style="--tab-color:${c.color}" data-action="category" data-index="${i}"><span class="tab-icon">${c.icon}</span><span>${esc(c.name)}${c.type==='music'?' ♫':''}</span><span class="tab-count">${categoryFilled(c)}/10</span></button>`).join('')}
-    <button class="category-tab bonus-tab ${activeBonus?'active':''} ${bonus.enabled?'bonus-enabled':'bonus-disabled'}" style="--tab-color:#f2a31c" data-action="bonus"><span class="tab-icon">⭐</span><span>Bonus Round</span><span class="tab-count">${bonus.enabled ? (bonus.question.trim() && bonus.answer.trim() ? 'Ready' : 'On') : 'Off'}</span></button>`;
+  const tabs = `${game.categories.map((c,i)=>`<button class="category-tab ${!activeBonus && i===activeCategory?'active':''}" style="--tab-color:${c.color}" data-action="category" data-index="${i}"><span class="tab-icon">${c.icon}</span><span>${esc(c.name)}${c.type==='music'?' ♫':c.type==='picture'?' 🖼️':''}</span><span class="tab-count">${categoryFilled(c)}/10</span></button>`).join('')}
+    <button class="category-tab bonus-tab ${activeBonus?'active':''} ${bonus.enabled?'bonus-enabled':'bonus-disabled'}" style="--tab-color:#f2a31c" data-action="bonus"><span class="tab-icon">⭐</span><span>${esc(bonus.name || 'Bonus Round')}</span><span class="tab-count">${bonus.enabled ? (bonus.question.trim() && bonus.answer.trim() ? 'Ready' : 'On') : 'Off'}</span></button>`;
 
   const mainContent = activeBonus ? `
     <aside class="question-list-card bonus-side-card">
       <div class="panel-title">FINAL ROUND</div>
       <div class="category-summary bonus-summary" style="--category-color:#f2a31c">
         <div class="category-summary-icon">⭐</div>
-        <div class="category-summary-copy"><strong>Bonus Round</strong><span>1 question after Category 7</span></div>
+        <div class="category-summary-copy"><strong>${esc(bonus.name || 'Bonus Round')}</strong><span>1 question after Category 7</span></div>
       </div>
       <label class="bonus-toggle-row">
         <span><strong>Include Bonus Round</strong><small>Show it at the end of the game</small></span>
         <input id="bonusEnabled" type="checkbox" ${bonus.enabled?'checked':''}>
         <i class="toggle-switch" aria-hidden="true"></i>
       </label>
-      <div class="bonus-flow-note"><b>Game flow</b><span>7 categories → Bonus Question → Bonus Answer → Trivia Complete</span></div>
+      <div class="bonus-flow-note"><b>Game flow</b><span>7 categories → ${esc(bonus.name || 'Bonus Round')} → answer reveal → Trivia Complete</span></div>
     </aside>
 
     <section class="editor-card bonus-editor-card">
       <div class="panel-title">EDIT BONUS ROUND</div>
-      <h2>⭐ Final Bonus Question</h2>
-      <p class="bonus-editor-help">This is one extra question after all 70 regular questions. It has its own answer reveal.</p>
+      <h2>⭐ ${esc(bonus.name || 'Bonus Round')}</h2>
+      <p class="bonus-editor-help">This is one extra question after all 70 regular questions. Give the round any category name you want.</p>
+      <div class="form-field"><label>Bonus Category Name</label><input id="bonusNameInput" class="text-input" maxlength="42" value="${esc(bonus.name || 'Bonus Round')}" placeholder="Example: Final Wager"></div>
       <div class="form-field"><label>Bonus Question</label><textarea id="bonusQuestionInput" class="text-area bonus-question-area" placeholder="Type the final bonus question...">${esc(bonus.question)}</textarea></div>
       <div class="form-field"><label>Bonus Answer</label><input id="bonusAnswerInput" class="text-input" value="${esc(bonus.answer)}" placeholder="Enter the bonus answer"></div>
       <div class="edit-footer"><button class="ui-btn ui-btn-coral" data-action="clear-bonus">Clear Bonus</button><button class="ui-btn ui-btn-teal" data-action="save">✓ Save Bonus</button></div>
@@ -515,52 +582,60 @@ function renderEditor() {
       <div class="preview-card bonus-preview-card">
         <div class="panel-title">BONUS PRESENTER PREVIEW</div>
         <div class="mini-presenter bonus-mini-presenter">
-          <div class="mini-ribbon bonus-mini-ribbon">⭐ BONUS ROUND</div>
+          <div class="mini-ribbon bonus-mini-ribbon">⭐ ${esc(bonus.name || 'Bonus Round').toUpperCase()}</div>
           <div class="mini-progress">FINAL QUESTION</div>
           <div class="mini-question">${esc(bonus.question || 'Your bonus question will appear here.')}</div>
         </div>
-        <div class="category-intro-preview bonus-intro-preview" style="--category-color:#f2a31c"><span>After Category 7:</span><strong>⭐ BONUS ROUND</strong><small>One question + answer reveal</small></div>
+        <div class="category-intro-preview bonus-intro-preview" style="--category-color:#f2a31c"><span>After Category 7:</span><strong>⭐ ${esc(bonus.name || 'Bonus Round')}</strong><small>One question + answer reveal</small></div>
         <a class="ui-btn ui-btn-primary preview-launch" href="play.html?game=${encodeURIComponent(game.id)}" target="_blank">⛶ Preview Full Screen</a>
       </div>
       <button class="ui-btn ui-btn-coral" data-action="delete">Delete This Game</button>
-    </aside>` : `    <aside class="question-list-card">
+    </aside>` : `
+    <aside class="question-list-card">
       <div class="panel-title">CATEGORY ${activeCategory+1} OF 7</div>
       <div class="category-summary" style="--category-color:${cat.color}">
         <div class="category-summary-icon">${cat.icon}</div>
-        <div class="category-summary-copy"><strong>${esc(cat.name)}${isMusic?' ♫':''}</strong><span>${categoryFilled(cat)}/10 ${isMusic?'songs':'questions'} ready</span></div>
+        <div class="category-summary-copy"><strong>${esc(cat.name)}${isMusic?' ♫':isPicture?' 🖼️':''}</strong><span>${categoryFilled(cat)}/10 ${isMusic?'songs':isPicture?'pictures':'questions'} ready</span></div>
       </div>
       <button class="ui-btn category-edit-btn" data-action="edit-category">✦ Edit Category Settings</button>
-      <div class="panel-title question-panel-title">${isMusic?'SONGS':'QUESTIONS'}</div>
+      <div class="panel-title question-panel-title">${isMusic?'SONGS':isPicture?'PICTURES':'QUESTIONS'}</div>
       <div class="question-list">
-        ${cat.questions.map((item,i)=>`<button class="question-row ${i===activeQuestion?'active':''}" data-action="question" data-index="${i}"><span class="q-number">${i+1}</span><span class="q-label ${isMusic ? (item.answer?'':'q-empty') : (item.question?'':'q-empty')}">${isMusic ? (item.answer ? esc(item.answer) : `Song ${i+1} — answer not entered`) : esc(item.question || 'Empty question')}</span></button>`).join('')}
+        ${cat.questions.map((item,i)=>`<button class="question-row ${i===activeQuestion?'active':''}" data-action="question" data-index="${i}"><span class="q-number">${i+1}</span><span class="q-label ${(isMusic?item.answer:isPicture?item.image:item.question)?'':'q-empty'}">${isMusic ? (item.answer ? esc(item.answer) : `Song ${i+1} — answer not entered`) : isPicture ? (item.image ? `Picture ${i+1}${item.answer?` — ${esc(item.answer)}`:''}` : `Picture ${i+1} — image not added`) : esc(item.question || 'Empty question')}</span></button>`).join('')}
       </div>
     </aside>
 
-    <section class="editor-card ${isMusic?'music-external-editor':''}">
-      <div class="panel-title">EDIT ${isMusic?'SONG':'QUESTION'} ${activeQuestion+1}</div>
-      <h2>${cat.icon} ${esc(cat.name)} · ${isMusic?'Song':'Question'} ${activeQuestion+1}</h2>
-      ${renderAIHelper(cat,isMusic)}
+    <section class="editor-card ${isMusic?'music-external-editor':isPicture?'picture-editor':''}">
+      <div class="panel-title">EDIT ${isMusic?'SONG':isPicture?'PICTURE':'QUESTION'} ${activeQuestion+1}</div>
+      <h2>${cat.icon} ${esc(cat.name)} · ${isMusic?'Song':isPicture?'Picture':'Question'} ${activeQuestion+1}</h2>
+      ${(!isPicture ? renderAIHelper(cat,isMusic) : '')}
       ${isMusic ? `
         <div class="external-music-callout"><div class="external-music-icon">📱</div><div><strong>Play the music from your phone</strong><span>Arrange your phone playlist in Question 1–10 order. Trivia Night handles the visual round only; your phone handles the music.</span></div></div>
         <div class="form-field"><label>Answer for Song ${activeQuestion+1}</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="Example: Take on Me — a-ha"></div>
-        <p class="music-editor-help">During the round, the projector displays only <strong>QUESTION ${activeQuestion+1}</strong>. The answer remains hidden until the 1–10 answer sheet.</p>
+        <p class="music-editor-help">During the round, the projector displays only <strong>QUESTION ${activeQuestion+1}</strong>. The answer remains hidden until the 1–10 answer slide.</p>
+      ` : isPicture ? `
+        <div class="picture-round-callout"><div>🖼️</div><div><strong>Picture Round</strong><span>Upload the image the audience should identify. The answer stays hidden until the answer slide.</span></div></div>
+        <div class="form-field"><label>Picture ${activeQuestion+1}</label><input id="pictureImageInput" class="text-input file-input" type="file" accept="image/*"></div>
+        ${q.image ? `<div class="picture-editor-preview"><img src="${q.image}" alt="Picture ${activeQuestion+1} preview"><button class="ui-btn ui-btn-small ui-btn-coral" data-action="remove-picture">Remove Image</button></div>` : `<div class="picture-empty-preview">No image uploaded yet.</div>`}
+        <div class="form-field"><label>Optional Picture Prompt</label><textarea id="questionInput" class="text-area picture-prompt" placeholder="Optional: Name this landmark, Who is this?, Identify this logo...">${esc(q.question)}</textarea></div>
+        <div class="form-field"><label>Answer</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="Enter the correct answer"></div>
       ` : `
         <div class="form-field"><label>Question</label><textarea id="questionInput" class="text-area" placeholder="Type the question the room will see...">${esc(q.question)}</textarea></div>
         <div class="form-field"><label>Answer</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="Enter the correct answer"></div>
       `}
-      <div class="edit-footer"><button class="ui-btn ui-btn-coral" data-action="clear-question">Clear ${isMusic?'Song':'Question'}</button><button class="ui-btn ui-btn-teal" data-action="save">✓ Save ${isMusic?'Song':'Question'}</button></div>
+      ${cat.timerEnabled ? `<div class="timer-editor-note">⏱ Auto-advance is ON for this round: <strong>${cat.timerSeconds} seconds</strong> per question.</div>` : ''}
+      <div class="edit-footer"><button class="ui-btn ui-btn-coral" data-action="clear-question">Clear ${isMusic?'Song':isPicture?'Picture':'Question'}</button><button class="ui-btn ui-btn-teal" data-action="save">✓ Save ${isMusic?'Song':isPicture?'Picture':'Question'}</button></div>
     </section>
 
     <aside class="preview-column">
       <div class="preview-card">
         <div class="panel-title">LIVE PRESENTER PREVIEW</div>
-        <div class="mini-presenter ${isMusic?'music-external-preview':''}">
+        <div class="mini-presenter ${isMusic?'music-external-preview':isPicture?'picture-mini-presenter':''}">
           <div class="mini-ribbon" style="background:${cat.color}">${cat.icon} ${esc(cat.name).toUpperCase()}</div>
-          <div class="mini-progress">QUESTION ${activeQuestion+1} OF 10</div>
-          <div class="mini-question ${isMusic?'music-preview-number':''}">${isMusic ? `QUESTION ${activeQuestion+1}` : esc(q.question || 'Your question will appear here.')}</div>
+          <div class="mini-progress">${isPicture?'PICTURE':'QUESTION'} ${activeQuestion+1} OF 10</div>
+          ${isPicture ? (q.image ? `<img class="mini-picture" src="${q.image}" alt="Picture preview">` : `<div class="mini-question">PICTURE ${activeQuestion+1}</div>`) : `<div class="mini-question ${isMusic?'music-preview-number':''}">${isMusic ? `QUESTION ${activeQuestion+1}` : esc(q.question || 'Your question will appear here.')}</div>`}
         </div>
         <div class="category-intro-preview" style="--category-color:${cat.color}">
-          <span>Before Question 1:</span><strong>${cat.icon} ${esc(cat.name)}${isMusic?' ♫':''}</strong><small>${isMusic?'Music Round · play songs externally from your phone':'Category intro screen'}</small>
+          <span>Before ${isPicture?'Picture':'Question'} 1:</span><strong>${cat.icon} ${esc(cat.name)}${isMusic?' ♫':isPicture?' 🖼️':''}</strong><small>${esc(cat.description || defaultRoundDescription(cat))}</small>
         </div>
         <a class="ui-btn ui-btn-primary preview-launch" href="play.html?game=${encodeURIComponent(game.id)}" target="_blank">⛶ Preview Full Screen</a>
       </div>
@@ -573,8 +648,10 @@ function renderEditor() {
         <div class="game-title-wrap">
           <div class="editor-game-icon" style="--category-color:${activeColor}">${activeIcon}</div>
           <input id="gameTitle" class="game-title-input" value="${esc(game.title)}" aria-label="Game title">
+          <span class="theme-chip">🎨 ${esc(themeName)}</span>
         </div>
         <div class="editor-toolbar">
+          <button class="ui-btn" data-action="presentation-settings">🎨 Presentation Setup</button>
           <button class="ui-btn ui-btn-teal" data-action="save">✓ Save Game</button>
           <button class="ui-btn" data-action="duplicate" data-id="${game.id}">▣ Duplicate</button>
           <label class="ui-btn" for="importFile">⇧ Import</label>
@@ -586,13 +663,15 @@ function renderEditor() {
       <div class="category-tabs">${tabs}</div>
     </div>
     <div class="editor-layout">${mainContent}</div>
-    <div id="categoryModalHost"></div>`;
+    <div id="categoryModalHost"></div>
+    <div id="presentationModalHost"></div>`;
   renderCategoryModal();
+  renderPresentationModal();
 }
 function openCategoryModal() {
   const game = selectedGame(); if (!game) return;
   const cat = game.categories[activeCategory];
-  categoryDraft = { name: cat.name, icon: cat.icon, color: cat.color, type: cat.type || 'standard' };
+  categoryDraft = { name: cat.name, icon: cat.icon, color: cat.color, type: cat.type || 'standard', description:cat.description||'', timerEnabled:Boolean(cat.timerEnabled), timerSeconds:cat.timerSeconds||30 };
   categoryModalOpen = true;
   renderCategoryModal();
 }
@@ -605,20 +684,44 @@ function renderCategoryModal() {
   const host = document.querySelector('#categoryModalHost');
   if (!host) return;
   if (!categoryModalOpen || !categoryDraft) { host.innerHTML=''; return; }
+  const typeLabel=categoryDraft.type==='music'?'Music round intro':categoryDraft.type==='picture'?'Picture round intro':'Presenter intro preview';
   host.innerHTML = `
-    <div class="modal-backdrop" data-modal-backdrop>
+    <div class="modal-backdrop" data-category-backdrop>
       <section class="category-modal" role="dialog" aria-modal="true" aria-label="Edit category">
         <div class="modal-header"><div><div class="panel-title">CATEGORY ${activeCategory+1} OF 7</div><h2>Edit Category</h2></div><button class="modal-close" data-action="category-cancel" aria-label="Close">×</button></div>
         <div class="form-field"><label>Category Name</label><input id="categoryDraftName" class="text-input" maxlength="42" value="${esc(categoryDraft.name)}" placeholder="Category name"></div>
-        <div class="form-field"><label>Round Type</label><select id="categoryDraftType" class="text-input"><option value="standard" ${categoryDraft.type==='standard'?'selected':''}>Standard Trivia</option><option value="music" ${categoryDraft.type==='music'?'selected':''}>♫ Music Round — External Audio</option></select></div>
-        <div class="music-modal-note" ${categoryDraft.type==='music'?'':'hidden'}>📱 Music is played separately from your phone/Bluetooth speaker. Trivia Night only displays QUESTION 1–10 and the answer sheet.</div>
+        <div class="form-field"><label>Round Description / Note <span class="optional-label">(shown on intro slide)</span></label><input id="categoryDraftDescription" class="text-input" maxlength="110" value="${esc(categoryDraft.description)}" placeholder="Example: Song / Artist, Name the logo, Multiple choice..."></div>
+        <div class="form-field"><label>Round Type</label><select id="categoryDraftType" class="text-input"><option value="standard" ${categoryDraft.type==='standard'?'selected':''}>Standard Trivia</option><option value="music" ${categoryDraft.type==='music'?'selected':''}>♫ Music Round — External Audio</option><option value="picture" ${categoryDraft.type==='picture'?'selected':''}>🖼️ Picture Round</option></select></div>
+        <div class="music-modal-note" ${categoryDraft.type==='music'?'':'hidden'}>📱 Music is played separately from your phone/Bluetooth speaker. Trivia Night displays QUESTION 1–10 and the answers.</div>
+        <div class="music-modal-note picture-modal-note" ${categoryDraft.type==='picture'?'':'hidden'}>🖼️ Upload one image for each of the 10 picture questions. The image appears on the projector; the answer stays hidden.</div>
+        <div class="timer-setting-row"><label class="timer-toggle"><input id="categoryDraftTimerEnabled" type="checkbox" ${categoryDraft.timerEnabled?'checked':''}><span><strong>Question Timer + Auto Advance</strong><small>Automatically move to the next question when time expires. Pass Your Papers always stays manual.</small></span></label><label class="timer-seconds">Seconds<input id="categoryDraftTimerSeconds" class="text-input" type="number" min="5" max="300" step="5" value="${categoryDraft.timerSeconds||30}" ${categoryDraft.timerEnabled?'':'disabled'}></label></div>
         <div class="form-field"><label>Category Color</label><div class="color-picker">${COLOR_LIBRARY.map(color => `<button class="color-swatch ${color.toLowerCase()===categoryDraft.color.toLowerCase()?'selected':''}" style="--swatch:${color}" data-action="pick-color" data-color="${color}" title="${color}" aria-label="Choose color ${color}"></button>`).join('')}</div></div>
-        <div class="form-field"><label>Choose an Icon</label><p class="picker-help">Pick the icon that best fits this round. You can use a different one for every game.</p><div class="icon-picker">${ICON_LIBRARY.map(icon => `<button class="icon-choice ${icon===categoryDraft.icon?'selected':''}" data-action="pick-icon" data-icon="${icon}" aria-label="Choose ${icon}"><span>${icon}</span></button>`).join('')}</div></div>
-        <div class="modal-preview" style="--category-color:${categoryDraft.color}"><div class="modal-preview-icon">${categoryDraft.icon}</div><div><span>${categoryDraft.type==='music'?'Music round intro':'Presenter intro preview'}</span><strong>${esc(categoryDraft.name || `Category ${activeCategory+1}`)}${categoryDraft.type==='music'?' ♫':''}</strong></div></div>
+        <div class="form-field"><label>Choose an Icon</label><p class="picker-help">More than 100 icons are available. Pick one that matches the round.</p><div class="icon-picker">${ICON_LIBRARY.map(icon => `<button class="icon-choice ${icon===categoryDraft.icon?'selected':''}" data-action="pick-icon" data-icon="${icon}" aria-label="Choose ${icon}"><span>${icon}</span></button>`).join('')}</div></div>
+        <div class="modal-preview" style="--category-color:${categoryDraft.color}"><div class="modal-preview-icon">${categoryDraft.icon}</div><div><span>${typeLabel}</span><strong>${esc(categoryDraft.name || `Category ${activeCategory+1}`)}${categoryDraft.type==='music'?' ♫':categoryDraft.type==='picture'?' 🖼️':''}</strong><small>${esc(categoryDraft.description || '')}</small></div></div>
         <div class="modal-actions"><button class="ui-btn" data-action="category-cancel">Cancel</button><button class="ui-btn ui-btn-teal" data-action="category-save">✓ Save Category</button></div>
       </section>
     </div>`;
 }
+function openPresentationModal(){ presentationModalOpen=true; renderPresentationModal(); }
+function closePresentationModal(){ presentationModalOpen=false; renderPresentationModal(); }
+function renderPresentationModal(){
+  const host=document.querySelector('#presentationModalHost'); if(!host) return;
+  const game=selectedGame();
+  if(!presentationModalOpen || !game){ host.innerHTML=''; return; }
+  host.innerHTML=`<div class="modal-backdrop" data-presentation-backdrop>
+    <section class="category-modal presentation-modal" role="dialog" aria-modal="true" aria-label="Presentation setup">
+      <div class="modal-header"><div><div class="panel-title">PRESENTATION SETUP</div><h2>Theme, Pre-Game & Halftime</h2></div><button class="modal-close" data-action="presentation-close" aria-label="Close">×</button></div>
+      <div class="form-field"><label>Presenter Theme / Background</label><div class="theme-picker">${THEME_LIBRARY.map(t=>`<button class="theme-choice theme-${t.id} ${game.theme===t.id?'selected':''}" data-action="theme-select" data-theme="${t.id}"><span class="theme-preview"></span><strong>${t.name}</strong><small>${t.desc}</small></button>`).join('')}</div></div>
+      <div class="presentation-section"><div><h3>Pre-Game Announcement Loop</h3><p>Upload announcement/rules images. They loop continuously until you manually start Category 1.</p></div><label class="ui-btn ui-btn-primary file-button">＋ Add Images<input id="announcementImagesInput" type="file" accept="image/*" multiple hidden></label></div>
+      <div class="announcement-options"><label>Seconds per slide<input id="announcementSecondsInput" class="text-input" type="number" min="2" max="60" value="${game.announcementSeconds||8}"></label><span>${game.announcements.length}/12 slides</span></div>
+      <div class="announcement-grid">${game.announcements.length?game.announcements.map((a,i)=>`<div class="announcement-thumb"><img src="${a.image}" alt="Announcement ${i+1}"><span>${i+1}. ${esc(a.name||'Announcement')}</span><button data-action="remove-announcement" data-index="${i}" aria-label="Remove announcement">×</button></div>`).join(''):'<div class="empty-media-state">No pre-game images uploaded.</div>'}</div>
+      <div class="presentation-section halftime-section"><div><h3>Halftime Screen</h3><p>Optional single image shown after Round 4 answers and before Round 5.</p></div><label class="ui-btn file-button">Upload Halftime Image<input id="halftimeImageInput" type="file" accept="image/*" hidden></label></div>
+      ${game.halftimeImage?`<div class="halftime-preview"><img src="${game.halftimeImage}" alt="Halftime preview"><button class="ui-btn ui-btn-small ui-btn-coral" data-action="remove-halftime">Remove Halftime Image</button></div>`:'<div class="empty-media-state">No halftime image selected.</div>'}
+      <p class="image-storage-note">Images are automatically compressed before they are stored with the game. Large numbers of image-heavy games may reach the browser storage limit.</p>
+      <div class="modal-actions"><button class="ui-btn ui-btn-teal" data-action="presentation-close">✓ Done</button></div>
+    </section></div>`;
+}
+
 
 function renderAll() { renderDashboard(); renderEditor(); setView(currentView); }
 function newGame() {
@@ -640,7 +743,7 @@ function deleteGame() {
 }
 function clearQuestion() {
   const game=selectedGame(); if (!game) return;
-  game.categories[activeCategory].questions[activeQuestion]={question:'',answer:''};
+  game.categories[activeCategory].questions[activeQuestion]={question:'',answer:'',image:''};
   touch(game,'Cleared'); renderEditor();
 }
 function clearBonus() {
@@ -653,12 +756,12 @@ function exportGame() {
   const blob=new Blob([JSON.stringify(game,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`${game.title.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'trivia-game'}.json`; a.click(); URL.revokeObjectURL(url);
 }
-function exportAnswerSheetsPdf(id) {
+async function exportAnswerSheetsPdf(id) {
   const game = games.find(g=>g.id===id) || selectedGame();
   if (!game) return;
   if (!window.TriviaAnswerSheets?.download) { alert('The PDF exporter did not load. Please refresh the page and try again.'); return; }
   try {
-    window.TriviaAnswerSheets.download(game);
+    await window.TriviaAnswerSheets.download(game);
     setStatus('Answer-sheet PDF exported');
   } catch (error) {
     console.error(error);
@@ -683,14 +786,19 @@ function saveActiveField(target) {
   if (target.id==='gameTitle') game.title=target.value;
   if (target.id==='questionInput') q.question=target.value;
   if (target.id==='answerInput') q.answer=target.value;
+  if (target.id==='bonusNameInput') game.bonus.name=target.value;
   if (target.id==='bonusQuestionInput') game.bonus.question=target.value;
   if (target.id==='bonusAnswerInput') game.bonus.answer=target.value;
   if (target.id==='bonusEnabled') { game.bonus.enabled=target.checked; touch(game,target.checked?'Bonus enabled':'Bonus disabled'); renderDashboard(); renderEditor(); return; }
-  if (target.id==='categoryDraftName' && categoryDraft) { categoryDraft.name=target.value; const preview=document.querySelector('.modal-preview strong'); if(preview) preview.textContent=(target.value || `Category ${activeCategory+1}`) + (categoryDraft.type==='music'?' ♫':''); return; }
-  if (target.id==='categoryDraftType' && categoryDraft) { categoryDraft.type=target.value==='music'?'music':'standard'; renderCategoryModal(); return; }
+  if (target.id==='announcementSecondsInput') { game.announcementSeconds=Math.min(60,Math.max(2,Number(target.value)||8)); touch(game,'Slide timing saved'); return; }
+  if (target.id==='categoryDraftName' && categoryDraft) { categoryDraft.name=target.value; const preview=document.querySelector('.modal-preview strong'); if(preview) preview.textContent=(target.value || `Category ${activeCategory+1}`) + (categoryDraft.type==='music'?' ♫':categoryDraft.type==='picture'?' 🖼️':''); return; }
+  if (target.id==='categoryDraftDescription' && categoryDraft) { categoryDraft.description=target.value; const preview=document.querySelector('.modal-preview small'); if(preview) preview.textContent=target.value; return; }
+  if (target.id==='categoryDraftType' && categoryDraft) { categoryDraft.type=['music','picture'].includes(target.value)?target.value:'standard'; renderCategoryModal(); return; }
+  if (target.id==='categoryDraftTimerEnabled' && categoryDraft) { categoryDraft.timerEnabled=target.checked; renderCategoryModal(); return; }
+  if (target.id==='categoryDraftTimerSeconds' && categoryDraft) { categoryDraft.timerSeconds=Math.min(300,Math.max(5,Number(target.value)||30)); return; }
   if (target.id==='aiDifficulty') { aiDifficulty=target.value || 'medium'; return; }
   if (target.id==='aiFocus') { aiFocus=target.value; return; }
-  if (!['gameTitle','questionInput','answerInput','bonusQuestionInput','bonusAnswerInput'].includes(target.id)) return;
+  if (!['gameTitle','questionInput','answerInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput'].includes(target.id)) return;
   touch(game);
   if (target.id==='questionInput' || target.id==='bonusQuestionInput') { const preview=document.querySelector('.mini-question'); if(preview) preview.textContent=target.value || (activeBonus ? 'Your bonus question will appear here.' : 'Your question will appear here.'); }
 }
@@ -710,13 +818,32 @@ function routeAction(el) {
   if (action==='ai-fill') generateAIHelper(true);
   if (action==='clear-bonus') clearBonus();
   if (action==='save') { persist(); setStatus('Saved'); renderDashboard(); }
-  if (action==='category') { activeBonus=false; activeCategory=Number(el.dataset.index); activeQuestion=0; resetHelper(); closeCategoryModal(); renderEditor(); }
+  if (action==='category') { activeBonus=false; activeCategory=Number(el.dataset.index); activeQuestion=0; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
   if (action==='question') { activeBonus=false; activeQuestion=Number(el.dataset.index); resetHelper(); renderEditor(); }
-  if (action==='bonus') { activeBonus=true; resetHelper(); closeCategoryModal(); renderEditor(); }
+  if (action==='bonus') { activeBonus=true; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
   if (action==='categories') { if (!selectedGame()) return; currentView='editor'; activeBonus=false; activeCategory=0; renderAll(); openCategoryModal(); }
   if (action==='questions') { if (!selectedGame()) return; currentView='editor'; activeBonus=false; activeQuestion=0; renderAll(); }
-  if (action==='edit-category') openCategoryModal();
+  if (action==='edit-category') { closePresentationModal(); openCategoryModal(); }
   if (action==='category-cancel') closeCategoryModal();
+  if (action==='presentation-settings') { closeCategoryModal(); openPresentationModal(); }
+  if (action==='presentation-close') { closePresentationModal(); renderEditor(); }
+  if (action==='theme-select') {
+    const game=selectedGame(); if(!game) return;
+    if(THEME_LIBRARY.some(t=>t.id===el.dataset.theme)) game.theme=el.dataset.theme;
+    touch(game,'Theme saved'); renderPresentationModal();
+  }
+  if (action==='remove-announcement') {
+    const game=selectedGame(); if(!game) return;
+    game.announcements.splice(Number(el.dataset.index),1); touch(game,'Announcement removed'); renderPresentationModal();
+  }
+  if (action==='remove-halftime') {
+    const game=selectedGame(); if(!game) return;
+    game.halftimeImage=''; game.halftimeName=''; touch(game,'Halftime image removed'); renderPresentationModal();
+  }
+  if (action==='remove-picture') {
+    const game=selectedGame(); if(!game) return;
+    game.categories[activeCategory].questions[activeQuestion].image=''; touch(game,'Picture removed'); renderEditor();
+  }
   if (action==='pick-icon' && categoryDraft) {
     categoryDraft.icon=el.dataset.icon;
     document.querySelectorAll('.icon-choice').forEach(x=>x.classList.remove('selected')); el.classList.add('selected');
@@ -732,22 +859,66 @@ function routeAction(el) {
     cat.name=(categoryDraft.name || `Category ${activeCategory+1}`).trim().slice(0,42);
     cat.icon=categoryDraft.icon || DEFAULT_ICONS[activeCategory];
     cat.color=sanitizeColor(categoryDraft.color, DEFAULT_COLORS[activeCategory]);
-    cat.type=categoryDraft.type==='music'?'music':'standard';
+    cat.type=['music','picture'].includes(categoryDraft.type)?categoryDraft.type:'standard';
+    cat.description=(categoryDraft.description||'').trim().slice(0,110);
+    cat.timerEnabled=Boolean(categoryDraft.timerEnabled);
+    cat.timerSeconds=Math.min(300,Math.max(5,Number(categoryDraft.timerSeconds)||30));
     categoryModalOpen=false; categoryDraft=null; resetHelper(); touch(game,'Category saved'); renderDashboard(); renderEditor();
   }
 }
 
+async function handleImageInput(target){
+  const game=selectedGame(); if(!game) return;
+  try{
+    if(target.id==='announcementImagesInput'){
+      const remaining=Math.max(0,12-game.announcements.length);
+      const files=[...target.files].slice(0,remaining);
+      if(!files.length) return;
+      setStatus('Processing images…');
+      for(const file of files){
+        const image=await compressImageFile(file,1400,900,.8);
+        game.announcements.push({id:makeId(),image,name:file.name.replace(/\.[^.]+$/,'')||'Announcement'});
+      }
+      if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
+      else setStatus(`${files.length} announcement${files.length===1?'':'s'} added`);
+      renderPresentationModal();
+    }
+    if(target.id==='halftimeImageInput' && target.files[0]){
+      setStatus('Processing halftime image…');
+      game.halftimeImage=await compressImageFile(target.files[0],1600,1000,.82);
+      game.halftimeName=target.files[0].name.replace(/\.[^.]+$/,'');
+      if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
+      else setStatus('Halftime image added');
+      renderPresentationModal();
+    }
+    if(target.id==='pictureImageInput' && target.files[0]){
+      setStatus('Processing picture…');
+      const q=game.categories[activeCategory].questions[activeQuestion];
+      q.image=await compressImageFile(target.files[0],1400,1000,.82);
+      if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
+      else setStatus('Picture added');
+      renderEditor();
+    }
+  }catch(error){ console.error(error); alert(error.message||'That image could not be added.'); }
+  target.value='';
+}
+
 document.addEventListener('click', e=>{
-  if (e.target.matches('[data-modal-backdrop]')) { closeCategoryModal(); return; }
+  if (e.target.matches('[data-category-backdrop]')) { closeCategoryModal(); return; }
+  if (e.target.matches('[data-presentation-backdrop]')) { closePresentationModal(); renderEditor(); return; }
   const el=e.target.closest('[data-action]'); if (el) routeAction(el);
-  const nav=e.target.closest('[data-view]'); if (nav) { currentView=nav.dataset.view; renderAll(); }
+  const nav=e.target.closest('[data-view]'); if (nav) { currentView=nav.dataset.view; closeCategoryModal(); closePresentationModal(); renderAll(); }
 });
 document.addEventListener('input', e=> saveActiveField(e.target));
-document.addEventListener('change', e=> saveActiveField(e.target));
-document.addEventListener('keydown', e=>{ if(e.key==='Escape' && categoryModalOpen) closeCategoryModal(); });
+document.addEventListener('change', e=>{
+  if(['announcementImagesInput','halftimeImageInput','pictureImageInput'].includes(e.target.id)){ handleImageInput(e.target); return; }
+  saveActiveField(e.target);
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ if(categoryModalOpen) closeCategoryModal(); if(presentationModalOpen){ closePresentationModal(); renderEditor(); } } });
 document.querySelector('#createGame').addEventListener('click', newGame);
-document.querySelector('#logoHome').addEventListener('click', ()=>{currentView='dashboard'; renderAll();});
+document.querySelector('#logoHome').addEventListener('click', ()=>{currentView='dashboard'; closeCategoryModal(); closePresentationModal(); renderAll();});
 document.querySelector('#importFile').addEventListener('change', e=>{ if(e.target.files[0]) importGame(e.target.files[0]); e.target.value=''; });
 
 persist();
 renderAll();
+

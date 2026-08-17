@@ -1,235 +1,113 @@
 (function(global){
   'use strict';
+  const PDF_W=792, PDF_H=612, SCALE=2, W=PDF_W*SCALE, H=PDF_H*SCALE;
+  const M=44, GAP=24, HEADER_H=106, CARD_GAP=18;
+  const CARD_W=(W-M*2-GAP)/2;
+  const CARD_H=(H-HEADER_H-M-CARD_GAP)/2;
 
-  // US Letter landscape - designed so all 7 rounds fit on two pages maximum.
-  const PAGE_W = 792;
-  const PAGE_H = 612;
-  const MARGIN = 28;
-  const GAP = 14;
-  const CARD_W = (PAGE_W - (MARGIN*2) - GAP) / 2;
-  const CARD_H = 224;
-
-  function asciiText(value='') {
-    return String(value)
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g,'')
-      .replace(/[\u2018\u2019]/g,"'")
-      .replace(/[\u201C\u201D]/g,'"')
-      .replace(/[\u2013\u2014]/g,'-')
-      .replace(/[^\x20-\x7E]/g,'');
+  function cleanFileName(value='trivia-night'){
+    return String(value||'trivia-night').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'trivia-night';
   }
-  function pdfEscape(value='') {
-    return asciiText(value).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+  function roundRect(ctx,x,y,w,h,r){
+    r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
   }
-  function cleanFileName(value='trivia-night') {
-    return asciiText(value).replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase() || 'trivia-night';
+  function fitText(ctx,text,maxWidth,start=30,min=16,weight=800){
+    let size=start; const family='Inter, Arial, sans-serif';
+    while(size>min){ ctx.font=`${weight} ${size}px ${family}`; if(ctx.measureText(text).width<=maxWidth) return size; size-=1; }
+    return min;
   }
-  function hexRgb(hex, fallback='#36a8f5') {
-    const match = /^#([0-9a-f]{6})$/i.exec(hex || '') || /^#([0-9a-f]{6})$/i.exec(fallback);
-    const n = parseInt(match[1],16);
-    return [((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255];
-  }
-  function fmt(n){ return Number(n.toFixed(3)); }
-  function rgbCmd(rgb, stroke=false){ return `${fmt(rgb[0])} ${fmt(rgb[1])} ${fmt(rgb[2])} ${stroke?'RG':'rg'}\n`; }
-  function textCmd(x,y,size,text,font='F1',rgb=[0.06,0.16,0.33]) {
-    return `${rgbCmd(rgb)}BT /${font} ${fmt(size)} Tf 1 0 0 1 ${fmt(x)} ${fmt(y)} Tm (${pdfEscape(text)}) Tj ET\n`;
-  }
-  function approxWidth(text,size,bold=false){ return asciiText(text).length * size * (bold ? 0.56 : 0.52); }
-  function fitSize(text,maxSize,minSize,maxWidth,bold=true){
-    let size=maxSize;
-    while(size>minSize && approxWidth(text,size,bold)>maxWidth) size-=0.5;
-    return size;
-  }
-
-  function wrapTitle(text,maxWidth,maxSize=13,minSize=7.25){
-    const words=asciiText(text).toUpperCase().trim().split(/\s+/).filter(Boolean);
-    if(!words.length) return {lines:['CATEGORY'],size:maxSize};
-    // Helvetica-Bold is wider than our generic approximation for many uppercase words.
-    // Use a deliberately conservative width estimate so exported headings never clip.
-    const titleWidth=(value,size)=>asciiText(value).length * size * 0.68;
-    for(let size=maxSize; size>=minSize; size-=0.25){
-      const one=words.join(' ');
-      if(titleWidth(one,size)<=maxWidth) return {lines:[one],size};
-      // Try every natural word break and choose the most balanced 2-line result.
-      let best=null;
-      for(let i=1;i<words.length;i++){
-        const a=words.slice(0,i).join(' '), b=words.slice(i).join(' ');
-        const wa=titleWidth(a,size), wb=titleWidth(b,size);
-        if(wa<=maxWidth && wb<=maxWidth){
-          const score=Math.max(wa,wb)+Math.abs(wa-wb)*0.12;
-          if(!best || score<best.score) best={lines:[a,b],size,score};
-        }
-      }
-      if(best) return {lines:best.lines,size:best.size};
-    }
-    // Last-resort word-safe wrapping at minimum size. Never clip mid-word.
-    const lines=[]; let line='';
-    for(const word of words){
-      const candidate=line ? line+' '+word : word;
-      if(!line || approxWidth(candidate,minSize,true)<=maxWidth) line=candidate;
-      else { lines.push(line); line=word; }
-    }
+  function drawCenteredWrapped(ctx,text,x,y,maxWidth,lineHeight,maxLines=2){
+    const words=String(text).split(/\s+/); const lines=[]; let line='';
+    for(const word of words){ const test=line?`${line} ${word}`:word; if(ctx.measureText(test).width>maxWidth && line){ lines.push(line); line=word; } else line=test; }
     if(line) lines.push(line);
-    return {lines:lines.slice(0,2),size:minSize};
+    const shown=lines.slice(0,maxLines); shown.forEach((ln,i)=>ctx.fillText(ln,x,y+(i-(shown.length-1)/2)*lineHeight));
   }
-
-  function circlePath(cx,cy,r){
-    const k=0.5522847498*r;
-    return `${fmt(cx+r)} ${fmt(cy)} m\n${fmt(cx+r)} ${fmt(cy+k)} ${fmt(cx+k)} ${fmt(cy+r)} ${fmt(cx)} ${fmt(cy+r)} c\n${fmt(cx-k)} ${fmt(cy+r)} ${fmt(cx-r)} ${fmt(cy+k)} ${fmt(cx-r)} ${fmt(cy)} c\n${fmt(cx-r)} ${fmt(cy-k)} ${fmt(cx-k)} ${fmt(cy-r)} ${fmt(cx)} ${fmt(cy-r)} c\n${fmt(cx+k)} ${fmt(cy-r)} ${fmt(cx+r)} ${fmt(cy-k)} ${fmt(cx+r)} ${fmt(cy)} c\nh\n`;
+  function color(hex,fallback='#36a8f5'){ return /^#[0-9a-f]{6}$/i.test(hex||'')?hex:fallback; }
+  function drawPageHeader(ctx,game,page){
+    ctx.fillStyle='#fffaf0'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#102a56'; ctx.fillRect(0,0,W,72);
+    ctx.fillStyle='#fff'; ctx.textBaseline='middle'; ctx.font='900 29px Inter, Arial, sans-serif'; ctx.textAlign='left'; ctx.fillText('TRIVIA NIGHT — ANSWER SHEET',M,36);
+    const title=String(game.title||'Trivia Night'); const fs=fitText(ctx,title,570,25,16,800); ctx.font=`800 ${fs}px Inter, Arial, sans-serif`; ctx.textAlign='right'; ctx.fillText(title,W-M,36);
+    ctx.fillStyle='#102a56'; ctx.font='900 18px Inter, Arial, sans-serif'; ctx.textAlign='left'; ctx.fillText('TEAM NAME:',M,93);
+    ctx.strokeStyle='#9eacbd'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(M+125,94); ctx.lineTo(W-375,94); ctx.stroke();
+    ctx.font='800 15px Inter, Arial, sans-serif'; ctx.fillStyle='#697a96'; ctx.textAlign='right'; ctx.fillText(`PAGE ${page} OF 2`,W-190,93);
+    ctx.fillStyle='#08b7a7'; ctx.fillText('70 QUESTIONS',W-M,93);
   }
-  function roundedRect(x,y,w,h,r){
-    const k=0.5522847498*r;
-    return `${fmt(x+r)} ${fmt(y)} m\n${fmt(x+w-r)} ${fmt(y)} l\n${fmt(x+w-r+k)} ${fmt(y)} ${fmt(x+w)} ${fmt(y+r-k)} ${fmt(x+w)} ${fmt(y+r)} c\n${fmt(x+w)} ${fmt(y+h-r)} l\n${fmt(x+w)} ${fmt(y+h-r+k)} ${fmt(x+w-r+k)} ${fmt(y+h)} ${fmt(x+w-r)} ${fmt(y+h)} c\n${fmt(x+r)} ${fmt(y+h)} l\n${fmt(x+r-k)} ${fmt(y+h)} ${fmt(x)} ${fmt(y+h-r+k)} ${fmt(x)} ${fmt(y+h-r)} c\n${fmt(x)} ${fmt(y+r)} l\n${fmt(x)} ${fmt(y+r-k)} ${fmt(x+r-k)} ${fmt(y)} ${fmt(x+r)} ${fmt(y)} c\nh\n`;
-  }
-
-  function pageHeader(game,pageNum){
-    const navy=[0.06,0.16,0.33], muted=[0.35,0.43,0.55], teal=[0.03,0.70,0.64], white=[1,1,1], cream=[1,0.985,0.95];
-    const title=asciiText(game.title || 'Trivia Night') || 'Trivia Night';
-    let s='';
-    s += rgbCmd(cream) + `0 0 ${PAGE_W} ${PAGE_H} re f\n`;
-    s += rgbCmd(navy) + `0 564 ${PAGE_W} 48 re f\n`;
-    s += textCmd(30,581,17,'TRIVIA NIGHT - ANSWER SHEET','F2',white);
-    const titleSize=fitSize(title,15,9,310,true);
-    s += textCmd(456,581,titleSize,title,'F2',white);
-    s += textCmd(30,539,10,'TEAM NAME:','F2',navy);
-    s += rgbCmd([0.62,0.68,0.76],true) + '1 w 103 537 m 463 537 l S\n';
-    s += textCmd(637,539,9,`PAGE ${pageNum} OF 2`,'F2',muted);
-    s += textCmd(704,539,9,'70 QUESTIONS','F2',teal);
-    return s;
-  }
-
-  function answerRow(x,y,w,number,accent){
-    const navy=[0.06,0.16,0.33], white=[1,1,1], line=[0.78,0.83,0.88];
-    let s='';
-    const cy=y+7;
-    s += rgbCmd(accent) + circlePath(x+10,cy,7) + 'f\n';
-    const num=String(number), fs=number===10?6.2:7.4;
-    s += textCmd(x+10-approxWidth(num,fs,true)/2,cy-2.6,fs,num,'F2',white);
-    s += rgbCmd(line,true) + `0.75 w ${fmt(x+23)} ${fmt(y+2)} m ${fmt(x+w-4)} ${fmt(y+2)} l S\n`;
-    return s;
-  }
-
-  function categoryCard(category,index,x,y){
-    const navy=[0.06,0.16,0.33], muted=[0.35,0.43,0.55], white=[1,1,1], border=[0.82,0.87,0.92];
-    const accent=hexRgb(category.color || '#36a8f5');
-    const name=asciiText(category.name || `Category ${index+1}`) || `Category ${index+1}`;
-    const music=category.type==='music';
-    let s='';
-    s += rgbCmd(white) + roundedRect(x,y,CARD_W,CARD_H,12) + 'f\n';
-    s += rgbCmd(border,true) + '1 w ' + roundedRect(x,y,CARD_W,CARD_H,12) + 'S\n';
-    s += rgbCmd(accent) + `${fmt(x)} ${fmt(y+CARD_H-36)} ${fmt(CARD_W)} 36 re f\n`;
-    s += textCmd(x+14,y+CARD_H-23,8.5,`ROUND ${index+1}`,'F2',white);
-    // Keep category titles inside the colored header without clipping.
-    // Reserve the left side for ROUND # and wrap long category names at word boundaries.
-    const titleAreaW=CARD_W-108;
-    const title=wrapTitle(name,titleAreaW,13.5,7.25);
-    if(title.lines.length===1){
-      const tw=asciiText(title.lines[0]).length * title.size * 0.68;
-      s += textCmd(x+CARD_W-14-tw,y+CARD_H-24.5,title.size,title.lines[0],'F2',white);
-    } else {
-      const lineSize=Math.min(title.size,9.25);
-      title.lines.slice(0,2).forEach((line,li)=>{
-        const tw=asciiText(line).length * lineSize * 0.68;
-        const ty=y+CARD_H-(li===0?15.5:28.5);
-        s += textCmd(x+CARD_W-14-tw,ty,lineSize,line,'F2',white);
-      });
+  function drawAnswerRows(ctx,x,y,w,h,accent){
+    const top=y+102, bottom=y+h-20, rowH=(bottom-top)/10;
+    for(let i=0;i<10;i++){
+      const cy=top+rowH*i+rowH/2;
+      ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(x+31,cy,15,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=`900 ${i===9?14:16}px Inter, Arial, sans-serif`; ctx.fillText(String(i+1),x+31,cy+1);
+      ctx.strokeStyle='#bac8d5'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(x+58,cy+7); ctx.lineTo(x+w-22,cy+7); ctx.stroke();
     }
-    s += textCmd(x+14,y+CARD_H-50,7.5,music?'MUSIC ROUND':'TRIVIA ROUND','F2',muted);
-    const firstY=y+CARD_H-68;
-    for(let i=0;i<10;i++) s += answerRow(x+15, firstY-(i*16), CARD_W-30, i+1, accent);
-    return s;
   }
-
-  function bonusCard(game,x,y){
-    const navy=[0.06,0.16,0.33], muted=[0.35,0.43,0.55], white=[1,1,1], border=[0.88,0.78,0.43], accent=[0.95,0.64,0.11];
-    let s='';
-    s += rgbCmd(white) + roundedRect(x,y,CARD_W,CARD_H,12) + 'f\n';
-    s += rgbCmd(border,true) + '1 w ' + roundedRect(x,y,CARD_W,CARD_H,12) + 'S\n';
-    s += rgbCmd(accent) + `${fmt(x)} ${fmt(y+CARD_H-36)} ${fmt(CARD_W)} 36 re f\n`;
-    s += textCmd(x+14,y+CARD_H-23,9,'FINAL ROUND','F2',navy);
-    s += textCmd(x+CARD_W-111,y+CARD_H-25,14,'BONUS','F2',navy);
-    s += textCmd(x+14,y+CARD_H-58,8,'ONE FINAL ANSWER','F2',muted);
-    s += rgbCmd(accent) + circlePath(x+26,y+105,11) + 'f\n';
-    s += textCmd(x+22.8,y+101.5,9,'1','F2',white);
-    s += rgbCmd([0.78,0.83,0.88],true) + `1 w ${fmt(x+48)} ${fmt(y+96)} m ${fmt(x+CARD_W-20)} ${fmt(y+96)} l S\n`;
-    s += textCmd(x+14,y+55,8,'Use this space for the final bonus answer.','F1',muted);
-    s += textCmd(x+14,y+34,8,'Pass your paper when the host calls for it.','F1',muted);
-    return s;
+  function drawCategoryCard(ctx,cat,index,x,y){
+    const accent=color(cat.color, '#36a8f5');
+    ctx.fillStyle='#fff'; roundRect(ctx,x,y,CARD_W,CARD_H,20); ctx.fill(); ctx.strokeStyle='#cfdce7'; ctx.lineWidth=2; ctx.stroke();
+    ctx.save(); roundRect(ctx,x,y,CARD_W,CARD_H,20); ctx.clip(); ctx.fillStyle=accent; ctx.fillRect(x,y,CARD_W,70); ctx.restore();
+    ctx.textBaseline='middle'; ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.font='900 17px Inter, Arial, sans-serif'; ctx.fillText(`ROUND ${index+1}`,x+20,y+35);
+    ctx.font='32px "Segoe UI Emoji", "Apple Color Emoji", sans-serif'; ctx.fillText(cat.icon||'❓',x+122,y+35);
+    const name=String(cat.name||`Category ${index+1}`).toUpperCase(); const titleX=x+170, max=CARD_W-190; const fs=fitText(ctx,name,max,27,16,900); ctx.font=`900 ${fs}px Inter, Arial, sans-serif`; ctx.textAlign='right';
+    if(ctx.measureText(name).width<=max){ ctx.fillText(name,x+CARD_W-20,y+35); }
+    else { ctx.textAlign='center'; ctx.font=`900 16px Inter, Arial, sans-serif`; drawCenteredWrapped(ctx,name,titleX+max/2,y+35,max,18,2); }
+    ctx.textAlign='left'; ctx.fillStyle='#697a96'; ctx.font='900 13px Inter, Arial, sans-serif';
+    const label=cat.type==='music'?'MUSIC ROUND':cat.type==='picture'?'PICTURE ROUND':'TRIVIA ROUND'; ctx.fillText(label,x+20,y+88);
+    drawAnswerRows(ctx,x,y,CARD_W,CARD_H,accent);
   }
-
-  function notesCard(x,y){
-    const navy=[0.06,0.16,0.33], muted=[0.35,0.43,0.55], white=[1,1,1], border=[0.82,0.87,0.92];
-    let s='';
-    s += rgbCmd(white) + roundedRect(x,y,CARD_W,CARD_H,12) + 'f\n';
-    s += rgbCmd(border,true) + '1 w ' + roundedRect(x,y,CARD_W,CARD_H,12) + 'S\n';
-    s += textCmd(x+14,y+CARD_H-27,13,'NOTES / TIEBREAKER','F2',navy);
-    s += textCmd(x+14,y+CARD_H-49,8,'Extra space if the host needs it.','F1',muted);
-    for(let i=0;i<7;i++){ const ly=y+145-(i*20); s += rgbCmd([0.80,0.84,0.89],true) + `0.7 w ${fmt(x+14)} ${fmt(ly)} m ${fmt(x+CARD_W-14)} ${fmt(ly)} l S\n`; }
-    return s;
+  function drawBonusCard(ctx,bonus,x,y){
+    const accent='#f2a31c';
+    ctx.fillStyle='#fff'; roundRect(ctx,x,y,CARD_W,CARD_H,20); ctx.fill(); ctx.strokeStyle='#e8d38d'; ctx.lineWidth=2; ctx.stroke();
+    ctx.save(); roundRect(ctx,x,y,CARD_W,CARD_H,20); ctx.clip(); ctx.fillStyle='#ffbf2f'; ctx.fillRect(x,y,CARD_W,70); ctx.restore();
+    ctx.fillStyle='#102a56'; ctx.textBaseline='middle'; ctx.textAlign='left'; ctx.font='900 17px Inter, Arial, sans-serif'; ctx.fillText('FINAL ROUND',x+20,y+35);
+    ctx.font='31px "Segoe UI Emoji", "Apple Color Emoji", sans-serif'; ctx.fillText('⭐',x+133,y+35);
+    const name=String(bonus?.name||'Bonus Round').toUpperCase(); const fs=fitText(ctx,name,CARD_W-205,27,16,900); ctx.font=`900 ${fs}px Inter, Arial, sans-serif`; ctx.textAlign='right'; ctx.fillText(name,x+CARD_W-20,y+35);
+    ctx.textAlign='left'; ctx.fillStyle='#697a96'; ctx.font='900 13px Inter, Arial, sans-serif'; ctx.fillText('ONE FINAL ANSWER',x+20,y+91);
+    const cy=y+155; ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(x+33,cy,18,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='900 18px Inter, Arial, sans-serif'; ctx.fillText('1',x+33,cy+1);
+    ctx.strokeStyle='#b8c6d4'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x+66,cy+12); ctx.lineTo(x+CARD_W-24,cy+12); ctx.stroke();
+    ctx.textAlign='left'; ctx.fillStyle='#697a96'; ctx.font='700 13px Inter, Arial, sans-serif'; ctx.fillText('Use this space for the final bonus answer.',x+20,y+220);
   }
-
-  function pageCommands(game,pageNum){
-    let s=pageHeader(game,pageNum);
-    const x1=MARGIN, x2=MARGIN+CARD_W+GAP;
-    const yTop=298, yBottom=60;
-    const indices=pageNum===1?[0,1,2,3]:[4,5,6];
-    if(pageNum===1){
-      s += categoryCard(game.categories[0],0,x1,yTop);
-      s += categoryCard(game.categories[1],1,x2,yTop);
-      s += categoryCard(game.categories[2],2,x1,yBottom);
-      s += categoryCard(game.categories[3],3,x2,yBottom);
-    } else {
-      s += categoryCard(game.categories[4],4,x1,yTop);
-      s += categoryCard(game.categories[5],5,x2,yTop);
-      s += categoryCard(game.categories[6],6,x1,yBottom);
-      s += (game.bonus && game.bonus.enabled) ? bonusCard(game,x2,yBottom) : notesCard(x2,yBottom);
-    }
-    return s;
+  function drawNotesCard(ctx,x,y){
+    ctx.fillStyle='#fff'; roundRect(ctx,x,y,CARD_W,CARD_H,20); ctx.fill(); ctx.strokeStyle='#cfdce7'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#102a56'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.font='900 24px Inter, Arial, sans-serif'; ctx.fillText('NOTES / TIEBREAKER',x+20,y+38);
+    ctx.fillStyle='#697a96'; ctx.font='700 13px Inter, Arial, sans-serif'; ctx.fillText('Extra space if the host needs it.',x+20,y+66);
+    for(let i=0;i<8;i++){ const ly=y+105+i*34; ctx.strokeStyle='#c3cfda'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x+20,ly); ctx.lineTo(x+CARD_W-20,ly); ctx.stroke(); }
   }
-
-  function buildPdf(game){
+  function pageCanvas(game,page){
+    const canvas=document.createElement('canvas'); canvas.width=W; canvas.height=H; const ctx=canvas.getContext('2d');
+    drawPageHeader(ctx,game,page);
+    const x1=M, x2=M+CARD_W+GAP, y1=HEADER_H, y2=HEADER_H+CARD_H+CARD_GAP;
+    if(page===1){ drawCategoryCard(ctx,game.categories[0],0,x1,y1); drawCategoryCard(ctx,game.categories[1],1,x2,y1); drawCategoryCard(ctx,game.categories[2],2,x1,y2); drawCategoryCard(ctx,game.categories[3],3,x2,y2); }
+    else { drawCategoryCard(ctx,game.categories[4],4,x1,y1); drawCategoryCard(ctx,game.categories[5],5,x2,y1); drawCategoryCard(ctx,game.categories[6],6,x1,y2); if(game.bonus?.enabled) drawBonusCard(ctx,game.bonus,x2,y2); else drawNotesCard(ctx,x2,y2); }
+    return canvas;
+  }
+  function dataUrlBytes(url){ const base64=url.split(',')[1]; const bin=atob(base64); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i); return out; }
+  function buildPdfFromJpegs(images){
+    const enc=new TextEncoder(), chunks=[]; let offset=0; const offsets=[0];
+    function pushText(t){ const b=enc.encode(t); chunks.push(b); offset+=b.length; }
+    function pushBytes(b){ chunks.push(b); offset+=b.length; }
+    function objText(n,body){ offsets[n]=offset; pushText(`${n} 0 obj\n${body}\nendobj\n`); }
+    function objImage(n,img){ offsets[n]=offset; pushText(`${n} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${W} /Height ${H} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); pushBytes(img); pushText(`\nendstream\nendobj\n`); }
+    pushText('%PDF-1.4\n%TRIVIA\n');
+    objText(1,'<< /Type /Catalog /Pages 2 0 R >>');
+    objText(2,'<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>');
+    objText(3,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>');
+    objImage(4,images[0]);
+    const c1='q 792 0 0 612 0 0 cm /Im1 Do Q'; objText(5,`<< /Length ${c1.length} >>\nstream\n${c1}\nendstream`);
+    objText(6,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /XObject << /Im2 7 0 R >> >> /Contents 8 0 R >>');
+    objImage(7,images[1]);
+    const c2='q 792 0 0 612 0 0 cm /Im2 Do Q'; objText(8,`<< /Length ${c2.length} >>\nstream\n${c2}\nendstream`);
+    const xref=offset; pushText('xref\n0 9\n0000000000 65535 f \n'); for(let i=1;i<=8;i++) pushText(`${String(offsets[i]).padStart(10,'0')} 00000 n \n`); pushText(`trailer\n<< /Size 9 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+    const out=new Uint8Array(offset); let pos=0; for(const c of chunks){out.set(c,pos);pos+=c.length;} return out;
+  }
+  async function buildPdf(game){
     if(!game || !Array.isArray(game.categories) || game.categories.length!==7) throw new Error('A valid Trivia Night game is required.');
-    const count=2;
-    const font1=7;
-    const font2=8;
-    const objects=[];
-    objects[1]='<< /Type /Catalog /Pages 2 0 R >>';
-    objects[2]='<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>';
-    for(let i=0;i<count;i++){
-      const pageObj=3+i*2, contentObj=pageObj+1;
-      const stream=pageCommands(game,i+1);
-      const streamBytes=new TextEncoder().encode(stream);
-      objects[pageObj]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> >> /Contents ${contentObj} 0 R >>`;
-      objects[contentObj]=`<< /Length ${streamBytes.length} >>\nstream\n${stream}endstream`;
-    }
-    objects[font1]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
-    objects[font2]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
-
-    const encoder=new TextEncoder();
-    const chunks=[]; let offset=0;
-    function push(str){ const b=encoder.encode(str); chunks.push(b); offset+=b.length; }
-    push('%PDF-1.4\n%TRIVIA\n');
-    const offsets=[0];
-    for(let i=1;i<objects.length;i++){ offsets[i]=offset; push(`${i} 0 obj\n${objects[i]}\nendobj\n`); }
-    const xref=offset;
-    push(`xref\n0 ${objects.length}\n`); push('0000000000 65535 f \n');
-    for(let i=1;i<objects.length;i++) push(`${String(offsets[i]).padStart(10,'0')} 00000 n \n`);
-    push(`trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
-    const out=new Uint8Array(offset); let cursor=0;
-    for(const c of chunks){ out.set(c,cursor); cursor+=c.length; }
-    return out;
+    if(document.fonts?.ready) try{ await document.fonts.ready; }catch{}
+    const jpegs=[1,2].map(page=>dataUrlBytes(pageCanvas(game,page).toDataURL('image/jpeg',.94)));
+    return buildPdfFromJpegs(jpegs);
   }
-
-  function download(game){
-    const bytes=buildPdf(game);
-    const blob=new Blob([bytes],{type:'application/pdf'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=`${cleanFileName(game.title)}-answer-sheet.pdf`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  async function download(game){
+    const bytes=await buildPdf(game); const blob=new Blob([bytes],{type:'application/pdf'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`${cleanFileName(game.title)}-answer-sheet.pdf`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1200);
   }
-
   global.TriviaAnswerSheets={buildPdf,download};
 })(typeof window!=='undefined'?window:globalThis);
