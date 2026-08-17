@@ -52,27 +52,22 @@ function musicHostConnected(){
   return Boolean(musicHostState && musicHostState.gameId===game?.id && Date.now()-Number(musicHostState.updatedAt||0)<3500);
 }
 function updateMusicSlideControls(){
-  const btn=stage.querySelector('[data-music-toggle]');
-  const status=stage.querySelector('[data-music-host-status]');
+  const btn=stage.querySelector('[data-music-play]');
   if(!btn || phase!=='question' || catType(game?.categories?.[categoryIndex])!=='music') return;
-  const connected=musicHostConnected();
-  const sameSong=connected && Number(musicHostState.categoryIndex)===categoryIndex && Number(musicHostState.questionIndex)===questionIndex;
-  const playing=sameSong && Boolean(musicHostState.playing);
-  btn.classList.toggle('is-playing',playing);
-  btn.querySelector('.music-play-icon').textContent=playing?'Ⅱ':'▶';
-  btn.querySelector('.music-play-label').textContent=playing?'PAUSE MUSIC':'PLAY MUSIC';
-  if(status){
-    status.textContent=!connected?'OPEN HOST MUSIC PLAYER':sameSong?(playing?'HOST PLAYER · PLAYING':'HOST PLAYER · READY'):'HOST PLAYER · READY';
-    status.classList.toggle('is-connected',connected);
-  }
+  // Keep the audience-facing control simple: it is always a PLAY button.
+  // The command includes this slide's category/question indexes so the host
+  // player loads and plays the exact saved clip for the current slide.
+  btn.classList.remove('is-playing');
+  const icon=btn.querySelector('.music-play-icon');
+  const label=btn.querySelector('.music-play-label');
+  if(icon) icon.textContent='▶';
+  if(label) label.textContent='PLAY MUSIC';
 }
 function sendMusicHostCommand(command){
   if(phase!=='question' || catType(game?.categories?.[categoryIndex])!=='music') return;
   const payload={type:'music-player-command',gameId:game.id,command,categoryIndex,questionIndex,nonce:`${Date.now()}-${Math.random()}`,updatedAt:Date.now()};
   try { presenterChannel?.postMessage(payload); } catch {}
   try { localStorage.setItem(musicHostCommandKey,JSON.stringify(payload)); } catch {}
-  const status=stage.querySelector('[data-music-host-status]');
-  if(status) status.textContent=musicHostConnected()?'SENDING TO HOST PLAYER…':'OPEN HOST MUSIC PLAYER';
 }
 function applyMusicHostState(state){
   if(!state || state.type!=='music-player-state' || state.gameId!==game?.id) return;
@@ -165,8 +160,7 @@ function render(resetAutomation=true){
         <div class="music-external-kicker">♫ MUSIC ROUND</div>
         <div class="music-external-question">QUESTION ${questionIndex+1}</div>
         <div class="music-slide-controls">
-          <button class="music-slide-play-button" type="button" data-music-toggle aria-label="Play or pause the host music player"><span class="music-play-icon">▶</span><span class="music-play-label">PLAY MUSIC</span></button>
-          <div class="music-slide-host-status" data-music-host-status>CONNECTING TO HOST PLAYER…</div>
+          <button class="music-slide-play-button" type="button" data-music-play aria-label="Play this slide's music clip"><span class="music-play-icon">▶</span><span class="music-play-label">PLAY MUSIC</span></button>
         </div>
       </section>`;
     } else if(type==='picture'){
@@ -320,7 +314,7 @@ presenterChannel?.addEventListener('message',e=>{
 nextBtn.addEventListener('click',next); backBtn.addEventListener('click',back); fullscreenBtn.addEventListener('click',fullscreen);
 stage.addEventListener('click',e=>{
   if(e.target.closest('[data-presenter-next]')) next();
-  if(e.target.closest('[data-music-toggle]')) sendMusicHostCommand('toggle');
+  if(e.target.closest('[data-music-play]')) sendMusicHostCommand('play');
 });
 document.addEventListener('keydown',e=>{
   if(['ArrowRight','Enter',' '].includes(e.key)){e.preventDefault();next();}
