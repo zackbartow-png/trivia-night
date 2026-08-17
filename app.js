@@ -654,8 +654,8 @@ function renderEditor() {
           <button class="ui-btn" data-action="presentation-settings">🎨 Presentation Setup</button>
           <button class="ui-btn ui-btn-teal" data-action="save">✓ Save Game</button>
           <button class="ui-btn" data-action="duplicate" data-id="${game.id}">▣ Duplicate</button>
-          <label class="ui-btn" for="importFile">⇧ Import</label>
-          <button class="ui-btn" data-action="export">⇩ Export Game</button>
+          <label class="ui-btn" for="importFile">⇧ Import Game</label>
+          <button class="ui-btn" data-action="export">⇩ Export .trivia</button>
           <button class="ui-btn" data-action="answer-pdf">PDF Answer Sheets</button>
           <a class="ui-btn ui-btn-primary" href="play.html?game=${encodeURIComponent(game.id)}" target="_blank">▶ Start Presenter</a>
         </div>
@@ -753,8 +753,20 @@ function clearBonus() {
 }
 function exportGame() {
   const game=selectedGame(); if (!game) return;
-  const blob=new Blob([JSON.stringify(game,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`${game.title.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'trivia-game'}.json`; a.click(); URL.revokeObjectURL(url);
+  const triviaFile = {
+    format: 'trivia-night-game',
+    formatVersion: 1,
+    exportedAt: new Date().toISOString(),
+    game
+  };
+  const blob=new Blob([JSON.stringify(triviaFile,null,2)],{type:'application/x-trivia+json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`${game.title.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'trivia-game'}.trivia`;
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus('Game exported as .trivia');
 }
 async function exportAnswerSheetsPdf(id) {
   const game = games.find(g=>g.id===id) || selectedGame();
@@ -772,11 +784,13 @@ async function exportAnswerSheetsPdf(id) {
 function importGame(file) {
   const reader=new FileReader(); reader.onload=()=>{
     try {
-      const data=normalizeGame(JSON.parse(reader.result));
+      const parsed=JSON.parse(reader.result);
+      const sourceGame = parsed?.format === 'trivia-night-game' && parsed?.game ? parsed.game : parsed;
+      const data=normalizeGame(sourceGame);
       if (!data.title || !Array.isArray(data.categories) || data.categories.length!==7) throw new Error('Invalid');
       data.id=makeId(); data.createdAt=new Date().toISOString(); data.updatedAt=data.createdAt;
-      games.unshift(data); selectedId=data.id; persist(); activeCategory=0; activeQuestion=0; activeBonus=false; currentView='editor'; renderAll(); setStatus('Imported');
-    } catch { alert('That file could not be imported. Please choose a Trivia Night JSON export.'); }
+      games.unshift(data); selectedId=data.id; persist(); activeCategory=0; activeQuestion=0; activeBonus=false; currentView='editor'; renderAll(); setStatus('Trivia game imported');
+    } catch { alert('That file could not be imported. Please choose a Trivia Night .trivia file or an older Trivia Night .json export.'); }
   }; reader.readAsText(file);
 }
 
