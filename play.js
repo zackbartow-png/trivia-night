@@ -132,7 +132,7 @@ function render(resetAutomation=true){
         <div class="slide-category">${icon} ${esc(name)}</div>
         <div class="slide-count">PICTURE ${questionIndex+1} OF 10</div>
         ${timerMarkup(cat)}
-        ${item.image?`<div class="picture-media-frame"><img class="presenter-picture" src="${item.image}" alt="Picture ${questionIndex+1}"></div>`:`<div class="picture-missing">PICTURE ${questionIndex+1}<small>No image uploaded</small></div>`}
+        ${item.image?`<div class="picture-media-frame"><img class="presenter-picture" src="${item.image}" alt="Picture ${questionIndex+1}" loading="eager" decoding="async"></div>`:`<div class="picture-missing">PICTURE ${questionIndex+1}<small>No image uploaded</small></div>`}
         ${item.question?`<div class="picture-prompt-text">${esc(item.question)}</div>`:''}
       </section>`;
     } else {

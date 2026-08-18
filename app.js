@@ -766,7 +766,10 @@ function compressImageFile(file, maxW=1280, maxH=900, quality=.8){
         const scale=Math.min(1,maxW/img.width,maxH/img.height);
         const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
         const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
-        const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+        const ctx=canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
         resolve(canvas.toDataURL('image/jpeg',quality));
       };
       img.src=reader.result;
@@ -1202,7 +1205,7 @@ async function handleImageInput(target){
       const categoryIndex=activeCategory;
       const questionIndex=activeQuestion;
       setStatus('Processing picture…');
-      const image=await compressImageFile(file,1400,1000,.82);
+      const image=await compressImageFile(file,2200,2200,.9);
       const currentGame=selectedGame();
       const q=currentGame?.categories?.[categoryIndex]?.questions?.[questionIndex];
       if(!currentGame || !q) throw new Error('Could not find that picture question. Please try again.');
