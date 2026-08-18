@@ -259,6 +259,12 @@ let currentView = 'dashboard';
 let categoryModalOpen = false;
 let categoryDraft = null;
 let presentationModalOpen = false;
+// Prevent returning from the operating-system file picker from re-rendering the editor
+// before the selected image's change event has a chance to run.
+const MEDIA_INPUT_IDS = new Set(['announcementImagesInput','halftimeImageInput','pictureImageInput']);
+let mediaFilePickerOpen = false;
+let mediaInputBusy = false;
+let pendingFocusSyncTimer = null;
 let helperSuggestion = null;
 let aiHelperLoading = false;
 let aiHelperError = '';
@@ -746,12 +752,16 @@ function defaultRoundDescription(cat){
 }
 function compressImageFile(file, maxW=1280, maxH=900, quality=.8){
   return new Promise((resolve,reject)=>{
-    if(!file || !file.type?.startsWith('image/')) return reject(new Error('Please choose an image file.'));
+    if(!file) return reject(new Error('Please choose an image file.'));
+    const type=String(file.type||'').toLowerCase();
+    const name=String(file.name||'').toLowerCase();
+    const supported=['image/jpeg','image/png','image/webp'].includes(type) || /\.(jpe?g|png|webp)$/i.test(name);
+    if(!supported) return reject(new Error('Supported picture files are JPG, JPEG, PNG, and WEBP. HEIC/HEIF files need to be converted to JPG first.'));
     const reader=new FileReader();
     reader.onerror=()=>reject(new Error('Could not read that image.'));
     reader.onload=()=>{
       const img=new Image();
-      img.onerror=()=>reject(new Error('Could not open that image.'));
+      img.onerror=()=>reject(new Error('Could not open that image. Try JPG, JPEG, PNG, or WEBP.'));
       img.onload=()=>{
         const scale=Math.min(1,maxW/img.width,maxH/img.height);
         const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
@@ -871,7 +881,7 @@ function renderEditor() {
         <p class="music-editor-help"><strong>The video is visible here only while you build the round.</strong> During the actual game, use the Host Music Player on your laptop and keep the projector on the Presenter window. The audience still sees only <strong>QUESTION ${activeQuestion+1}</strong>.</p>
       ` : isPicture ? `
         <div class="picture-round-callout"><div>🖼️</div><div><strong>Picture Round</strong><span>Upload the image the audience should identify. The answer stays hidden until the answer slide.</span></div></div>
-        <div class="form-field"><label>Picture ${activeQuestion+1}</label><input id="pictureImageInput" class="text-input file-input" type="file" accept="image/*"></div>
+        <div class="form-field"><label>Picture ${activeQuestion+1}</label><input id="pictureImageInput" class="text-input file-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><p class="picker-help">Supported: JPG, JPEG, PNG, WEBP. HEIC/HEIF must be converted to JPG first.</p></div>
         ${q.image ? `<div class="picture-editor-preview"><img src="${q.image}" alt="Picture ${activeQuestion+1} preview"><button class="ui-btn ui-btn-small ui-btn-coral" data-action="remove-picture">Remove Image</button></div>` : `<div class="picture-empty-preview">No image uploaded yet.</div>`}
         <div class="form-field"><label>Optional Picture Prompt</label><textarea id="questionInput" class="text-area picture-prompt" placeholder="Optional: Name this landmark, Who is this?, Identify this logo...">${esc(q.question)}</textarea></div>
         <div class="form-field"><label>Answer</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="Enter the correct answer"></div>
@@ -1185,11 +1195,22 @@ async function handleImageInput(target){
       renderPresentationModal();
     }
     if(target.id==='pictureImageInput' && target.files[0]){
+      // Snapshot the file and question before any async image work. Returning from the
+      // OS file picker can fire focus/visibility events, so do not rely on the live input
+      // or active question after compression starts.
+      const file=target.files[0];
+      const categoryIndex=activeCategory;
+      const questionIndex=activeQuestion;
       setStatus('Processing picture…');
-      const q=game.categories[activeCategory].questions[activeQuestion];
-      q.image=await compressImageFile(target.files[0],1400,1000,.82);
+      const image=await compressImageFile(file,1400,1000,.82);
+      const currentGame=selectedGame();
+      const q=currentGame?.categories?.[categoryIndex]?.questions?.[questionIndex];
+      if(!currentGame || !q) throw new Error('Could not find that picture question. Please try again.');
+      q.image=image;
+      currentGame.updatedAt=new Date().toISOString();
       if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
-      else setStatus('Picture added');
+      else setStatus(`Picture added: ${file.name}`);
+      renderDashboard();
       renderEditor();
     }
   }catch(error){ console.error(error); alert(error.message||'That image could not be added.'); }
@@ -1210,6 +1231,7 @@ document.addEventListener('change', e=>{
 });
 
 document.addEventListener('click', e=>{
+  if (MEDIA_INPUT_IDS.has(e.target?.id)) mediaFilePickerOpen=true;
   if (e.target.matches('[data-category-backdrop]')) { closeCategoryModal(); return; }
   if (e.target.matches('[data-presentation-backdrop]')) { closePresentationModal(); renderEditor(); return; }
   const el=e.target.closest('[data-action]'); if (el) routeAction(el);
@@ -1217,7 +1239,13 @@ document.addEventListener('click', e=>{
 });
 document.addEventListener('input', e=> saveActiveField(e.target));
 document.addEventListener('change', e=>{
-  if(['announcementImagesInput','halftimeImageInput','pictureImageInput'].includes(e.target.id)){ handleImageInput(e.target); return; }
+  if(MEDIA_INPUT_IDS.has(e.target.id)){
+    mediaFilePickerOpen=false;
+    mediaInputBusy=true;
+    clearTimeout(pendingFocusSyncTimer);
+    Promise.resolve(handleImageInput(e.target)).finally(()=>{ mediaInputBusy=false; });
+    return;
+  }
   saveActiveField(e.target);
 });
 // Manual IN/OUT values also save when the field is committed (blur/change).
@@ -1232,9 +1260,17 @@ document.addEventListener('change', e=>{
 window.addEventListener('storage', e=>{
   if(e.key===STORAGE_KEY) syncGamesFromStorage({render:true});
 });
-window.addEventListener('focus', ()=>syncGamesFromStorage({render:true}));
+window.addEventListener('focus', ()=>{
+  clearTimeout(pendingFocusSyncTimer);
+  // File dialogs return focus before the file input's change event in some browsers.
+  // Delay synchronization so we do not destroy the input before its selected file is handled.
+  pendingFocusSyncTimer=setTimeout(()=>{
+    if(mediaFilePickerOpen){ mediaFilePickerOpen=false; return; }
+    if(!mediaInputBusy) syncGamesFromStorage({render:true});
+  },350);
+});
 document.addEventListener('visibilitychange', ()=>{
-  if(!document.hidden) syncGamesFromStorage({render:true});
+  if(!document.hidden && !mediaFilePickerOpen && !mediaInputBusy) syncGamesFromStorage({render:true});
 });
 window.addEventListener('beforeunload', ()=>{
   try { saveActiveMusicTrimDraft('Clip marks saved'); persist(); } catch {}
