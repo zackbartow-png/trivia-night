@@ -236,6 +236,8 @@ const blankCategory = (i) => ({
   questions: Array.from({ length: 10 }, () => ({ question: '', answer: '', image: '', youtubeUrl: '', youtubeIn: 0, youtubeOut: 0 }))
 });
 const blankBonus = () => ({ enabled: true, name: 'Bonus Round', question: '', answer: '' });
+const blankTieBreaker = () => ({ enabled: false, name: 'Tie Breaker', question: '', answer: '' });
+const blankBetweenCategorySlides = () => Array.from({length:6}, (_,i) => ({ image:'', name:`Between Category ${i+1} & ${i+2}` }));
 const createBlankGame = () => ({
   id: makeId(),
   title: `Trivia Night — ${new Date().toLocaleDateString()}`,
@@ -246,8 +248,10 @@ const createBlankGame = () => ({
   announcements: [],
   halftimeImage: '',
   halftimeName: '',
+  betweenCategorySlides: blankBetweenCategorySlides(),
   categories: Array.from({ length: 7 }, (_, i) => blankCategory(i)),
-  bonus: blankBonus()
+  bonus: blankBonus(),
+  tieBreaker: blankTieBreaker()
 });
 
 let games = loadGames();
@@ -255,13 +259,14 @@ let selectedId = localStorage.getItem(SELECTED_KEY) || games[0]?.id || '';
 let activeCategory = 0;
 let activeQuestion = 0;
 let activeBonus = false;
+let activeTieBreaker = false;
 let currentView = 'dashboard';
 let categoryModalOpen = false;
 let categoryDraft = null;
 let presentationModalOpen = false;
 // Prevent returning from the operating-system file picker from re-rendering the editor
 // before the selected image's change event has a chance to run.
-const MEDIA_INPUT_IDS = new Set(['announcementImagesInput','halftimeImageInput','pictureImageInput']);
+const MEDIA_INPUT_IDS = new Set(['announcementImagesInput','halftimeImageInput','pictureImageInput', ...Array.from({length:6},(_,i)=>`betweenCategoryImageInput${i}`)]);
 let mediaFilePickerOpen = false;
 let mediaInputBusy = false;
 let pendingFocusSyncTimer = null;
@@ -317,6 +322,18 @@ function normalizeGame(game) {
     question: sourceBonus.question || '',
     answer: sourceBonus.answer || ''
   };
+  const sourceTieBreaker = game.tieBreaker || game.tiebreaker || {};
+  game.tieBreaker = {
+    enabled: typeof sourceTieBreaker.enabled === 'boolean' ? sourceTieBreaker.enabled : false,
+    name: sourceTieBreaker.name || 'Tie Breaker',
+    question: sourceTieBreaker.question || '',
+    answer: sourceTieBreaker.answer || ''
+  };
+  const sourceBetween = Array.isArray(game.betweenCategorySlides) ? game.betweenCategorySlides : [];
+  game.betweenCategorySlides = Array.from({length:6}, (_,i) => ({
+    image: sourceBetween[i]?.image || '',
+    name: sourceBetween[i]?.name || `Between Category ${i+1} & ${i+2}`
+  }));
   game.theme = THEME_LIBRARY.some(t=>t.id===game.theme) ? game.theme : 'party';
   game.announcementSeconds = Math.min(60, Math.max(2, Number(game.announcementSeconds) || 8));
   game.announcements = Array.isArray(game.announcements) ? game.announcements.filter(x=>x && x.image).map(x=>({id:x.id||makeId(), image:x.image, name:x.name||'Announcement'})).slice(0,12) : [];
@@ -389,21 +406,21 @@ function setView(view) {
     subtitle.textContent = 'Create, manage, and launch your trivia nights.';
   } else {
     title.textContent = 'Game Editor';
-    subtitle.textContent = 'Build 7 rounds of 10, including trivia, music, or picture rounds, plus an optional final bonus round.';
+    subtitle.textContent = 'Build 7 rounds of 10, with optional between-category slides, a bonus round, and a tie breaker.';
   }
 }
 
 function renderDashboard() {
   const host = document.querySelector('#dashboardView');
-  const totalQuestions = games.reduce((sum,g) => sum + filledCount(g) + (g.bonus?.enabled && g.bonus.question.trim() && g.bonus.answer.trim() ? 1 : 0),0);
-  const ready = games.filter(g => filledCount(g) === 70 && (!g.bonus?.enabled || (g.bonus.question.trim() && g.bonus.answer.trim()))).length;
+  const totalQuestions = games.reduce((sum,g) => sum + filledCount(g) + (g.bonus?.enabled && g.bonus.question.trim() && g.bonus.answer.trim() ? 1 : 0) + (g.tieBreaker?.enabled && g.tieBreaker.question.trim() && g.tieBreaker.answer.trim() ? 1 : 0),0);
+  const ready = games.filter(g => filledCount(g) === 70 && (!g.bonus?.enabled || (g.bonus.question.trim() && g.bonus.answer.trim())) && (!g.tieBreaker?.enabled || (g.tieBreaker.question.trim() && g.tieBreaker.answer.trim()))).length;
   host.innerHTML = `
     <div class="dashboard-hero">
       <div class="hero-card">
         <div class="hero-accent">🏆</div>
         <div>
           <h2>Everything you need for trivia night.</h2>
-          <p>Build seven rounds using standard trivia, YouTube-linked music, or picture rounds; add pre-game announcements, halftime, a theme, and an optional bonus round.</p>
+          <p>Build seven rounds using standard trivia, YouTube-linked music, or picture rounds; add pre-game announcements, optional slides between categories, halftime, a theme, a bonus round, and a tie breaker.</p>
           <button class="ui-btn ui-btn-teal" data-action="new">＋ Build a Game</button>
         </div>
       </div>
@@ -411,13 +428,13 @@ function renderDashboard() {
         <div class="stat-card"><strong>${games.length}</strong><span>Saved Games</span></div>
         <div class="stat-card"><strong>${ready}</strong><span>Game${ready===1?'':'s'} Ready</span></div>
         <div class="stat-card"><strong>${totalQuestions}</strong><span>Questions / Songs Ready</span></div>
-        <div class="stat-card"><strong>70+1</strong><span>7 Rounds + Bonus</span></div>
+        <div class="stat-card"><strong>70+2</strong><span>7 Rounds + Finals</span></div>
       </div>
     </div>
     ${games.length ? `<div class="game-grid">${games.map(gameCard).join('')}</div>` : `
       <div class="empty-dashboard">
         <div class="big-icon">🎉</div><h2>Create your first Trivia Night</h2>
-        <p>Every game has 7 rounds of 10. Any round can be standard trivia, a YouTube-linked Music Round, or a Picture Round, plus an optional one-question bonus round.</p>
+        <p>Every game has 7 rounds of 10. Any round can be standard trivia, a YouTube-linked Music Round, or a Picture Round, plus optional bonus and tie-breaker rounds.</p>
         <button class="ui-btn ui-btn-primary" data-action="new">＋ Create New Game</button>
       </div>`}
   `;
@@ -436,7 +453,7 @@ function gameCard(g) {
           <div class="game-date">Updated ${formattedDate(g.updatedAt)}</div>
         </div>
       </div>
-      <div class="category-chips">${g.categories.map(c => `<span class="cat-chip" style="--chip-color:${c.color}"><b>${c.icon}</b>${esc(c.name)}${c.type==='music'?' ♫':c.type==='picture'?' 🖼️':''}</span>`).join('')}<span class="cat-chip bonus-chip ${g.bonus?.enabled?'bonus-on':'bonus-off'}"><b>⭐</b>Bonus ${g.bonus?.enabled?'On':'Off'}</span></div>
+      <div class="category-chips">${g.categories.map(c => `<span class="cat-chip" style="--chip-color:${c.color}"><b>${c.icon}</b>${esc(c.name)}${c.type==='music'?' ♫':c.type==='picture'?' 🖼️':''}</span>`).join('')}<span class="cat-chip bonus-chip ${g.bonus?.enabled?'bonus-on':'bonus-off'}"><b>⭐</b>Bonus ${g.bonus?.enabled?'On':'Off'}</span><span class="cat-chip bonus-chip ${g.tieBreaker?.enabled?'bonus-on':'bonus-off'}"><b>🎯</b>Tie Breaker ${g.tieBreaker?.enabled?'On':'Off'}</span></div>
       <div class="game-progress-wrap">
         <div class="game-progress">${filled}/70 questions/songs complete</div>
         <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -461,7 +478,7 @@ function usedQuestionTexts(game) {
   return new Set((game?.categories || []).flatMap(c => c.questions || []).map(q => (q.question || '').trim().toLowerCase()).filter(Boolean));
 }
 function suggestHelper() {
-  const game=selectedGame(); if (!game || activeBonus) return;
+  const game=selectedGame(); if (!game || activeBonus || activeTieBreaker) return;
   const cat=game.categories[activeCategory];
   if (cat.type === 'music') {
     const used=new Set(cat.questions.map(q=>(q.answer||'').trim().toLowerCase()).filter(Boolean));
@@ -480,7 +497,7 @@ function suggestHelper() {
   renderEditor();
 }
 function useHelperSuggestion() {
-  const game=selectedGame(); if (!game || !helperSuggestion || activeBonus) return;
+  const game=selectedGame(); if (!game || !helperSuggestion || activeBonus || activeTieBreaker) return;
   const cat=game.categories[activeCategory]; const q=cat.questions[activeQuestion];
   if (cat.type === 'music') q.answer=helperSuggestion.a;
   else { q.question=helperSuggestion.q; q.answer=helperSuggestion.a; }
@@ -513,7 +530,7 @@ function renderAIHelper(cat, isMusic) {
 }
 
 async function generateAIHelper(fillEmpty=false) {
-  const game=selectedGame(); if (!game || activeBonus || aiHelperLoading) return;
+  const game=selectedGame(); if (!game || activeBonus || activeTieBreaker || aiHelperLoading) return;
   const cat=game.categories[activeCategory];
   const isMusic=cat.type==='music';
   const emptyIndexes=cat.questions.map((item,i)=>({item,i})).filter(({item})=>isMusic ? !item.answer.trim() : !(item.question.trim() && item.answer.trim())).map(x=>x.i);
@@ -613,7 +630,7 @@ function loadYouTubeTrimApi() {
 }
 function activeMusicQuestion() {
   const game=selectedGame();
-  if(!game || activeBonus) return null;
+  if(!game || activeBonus || activeTieBreaker) return null;
   const cat=game.categories?.[activeCategory];
   if(!cat || cat.type!=='music') return null;
   return cat.questions?.[activeQuestion] || null;
@@ -788,14 +805,53 @@ function renderEditor() {
   const isMusic = cat.type === 'music';
   const isPicture = cat.type === 'picture';
   const bonus = game.bonus || blankBonus();
-  const activeIcon = activeBonus ? '⭐' : cat.icon;
-  const activeColor = activeBonus ? '#f2a31c' : cat.color;
+  const tieBreaker = game.tieBreaker || blankTieBreaker();
+  const activeIcon = activeTieBreaker ? '🎯' : activeBonus ? '⭐' : cat.icon;
+  const activeColor = activeTieBreaker ? '#08b7a7' : activeBonus ? '#f2a31c' : cat.color;
   const themeName=THEME_LIBRARY.find(t=>t.id===game.theme)?.name || 'Bright Party';
 
-  const tabs = `${game.categories.map((c,i)=>`<button class="category-tab ${!activeBonus && i===activeCategory?'active':''}" style="--tab-color:${c.color}" data-action="category" data-index="${i}"><span class="tab-icon">${c.icon}</span><span>${esc(c.name)}${c.type==='music'?' ♫':c.type==='picture'?' 🖼️':''}</span><span class="tab-count">${categoryFilled(c)}/10</span></button>`).join('')}
-    <button class="category-tab bonus-tab ${activeBonus?'active':''} ${bonus.enabled?'bonus-enabled':'bonus-disabled'}" style="--tab-color:#f2a31c" data-action="bonus"><span class="tab-icon">⭐</span><span>${esc(bonus.name || 'Bonus Round')}</span><span class="tab-count">${bonus.enabled ? (bonus.question.trim() && bonus.answer.trim() ? 'Ready' : 'On') : 'Off'}</span></button>`;
+  const tabs = `${game.categories.map((c,i)=>`<button class="category-tab ${!activeBonus && !activeTieBreaker && i===activeCategory?'active':''}" style="--tab-color:${c.color}" data-action="category" data-index="${i}"><span class="tab-icon">${c.icon}</span><span>${esc(c.name)}${c.type==='music'?' ♫':c.type==='picture'?' 🖼️':''}</span><span class="tab-count">${categoryFilled(c)}/10</span></button>`).join('')}
+    <button class="category-tab bonus-tab ${activeBonus?'active':''} ${bonus.enabled?'bonus-enabled':'bonus-disabled'}" style="--tab-color:#f2a31c" data-action="bonus"><span class="tab-icon">⭐</span><span>${esc(bonus.name || 'Bonus Round')}</span><span class="tab-count">${bonus.enabled ? (bonus.question.trim() && bonus.answer.trim() ? 'Ready' : 'On') : 'Off'}</span></button>
+    <button class="category-tab tiebreaker-tab ${activeTieBreaker?'active':''} ${tieBreaker.enabled?'bonus-enabled':'bonus-disabled'}" style="--tab-color:#08b7a7" data-action="tie-breaker"><span class="tab-icon">🎯</span><span>${esc(tieBreaker.name || 'Tie Breaker')}</span><span class="tab-count">${tieBreaker.enabled ? (tieBreaker.question.trim() && tieBreaker.answer.trim() ? 'Ready' : 'On') : 'Off'}</span></button>`;
 
-  const mainContent = activeBonus ? `
+  const mainContent = activeTieBreaker ? `
+    <aside class="question-list-card bonus-side-card tiebreaker-side-card">
+      <div class="panel-title">TIE BREAKER</div>
+      <div class="category-summary bonus-summary" style="--category-color:#08b7a7">
+        <div class="category-summary-icon">🎯</div>
+        <div class="category-summary-copy"><strong>${esc(tieBreaker.name || 'Tie Breaker')}</strong><span>1 optional question after the final round</span></div>
+      </div>
+      <label class="bonus-toggle-row tiebreaker-toggle-row">
+        <span><strong>Include Tie Breaker</strong><small>Available after the bonus round if a tie needs to be settled</small></span>
+        <input id="tieBreakerEnabled" type="checkbox" ${tieBreaker.enabled?'checked':''}>
+        <i class="toggle-switch" aria-hidden="true"></i>
+      </label>
+      <div class="bonus-flow-note"><b>Game flow</b><span>Category 7 → ${bonus.enabled ? esc(bonus.name || 'Bonus Round')+' → ' : ''}${esc(tieBreaker.name || 'Tie Breaker')} → Trivia Complete</span></div>
+    </aside>
+
+    <section class="editor-card bonus-editor-card tiebreaker-editor-card">
+      <div class="panel-title">EDIT TIE BREAKER</div>
+      <h2>🎯 ${esc(tieBreaker.name || 'Tie Breaker')}</h2>
+      <p class="bonus-editor-help">This is an optional one-question tie breaker after the regular game and bonus round. Turn it off for games that do not need one.</p>
+      <div class="form-field"><label>Tie Breaker Category Name</label><input id="tieBreakerNameInput" class="text-input" maxlength="42" value="${esc(tieBreaker.name || 'Tie Breaker')}" placeholder="Example: Closest Wins"></div>
+      <div class="form-field"><label>Tie Breaker Question</label><textarea id="tieBreakerQuestionInput" class="text-area bonus-question-area" placeholder="Type the tie-breaker question...">${esc(tieBreaker.question)}</textarea></div>
+      <div class="form-field"><label>Tie Breaker Answer</label><input id="tieBreakerAnswerInput" class="text-input" value="${esc(tieBreaker.answer)}" placeholder="Enter the correct answer"></div>
+      <div class="edit-footer"><button class="ui-btn ui-btn-coral" data-action="clear-tie-breaker">Clear Tie Breaker</button><button class="ui-btn ui-btn-teal" data-action="save">✓ Save Tie Breaker</button></div>
+    </section>
+
+    <aside class="preview-column">
+      <div class="preview-card bonus-preview-card tiebreaker-preview-card">
+        <div class="panel-title">TIE BREAKER PRESENTER PREVIEW</div>
+        <div class="mini-presenter bonus-mini-presenter">
+          <div class="mini-ribbon" style="background:#08b7a7">🎯 ${esc(tieBreaker.name || 'Tie Breaker').toUpperCase()}</div>
+          <div class="mini-progress">TIE BREAKER</div>
+          <div class="mini-question">${esc(tieBreaker.question || 'Your tie-breaker question will appear here.')}</div>
+        </div>
+        <div class="category-intro-preview bonus-intro-preview" style="--category-color:#08b7a7"><span>After the final round:</span><strong>🎯 ${esc(tieBreaker.name || 'Tie Breaker')}</strong><small>One question + answer reveal</small></div>
+        <a class="ui-btn ui-btn-primary preview-launch" href="play.html?game=${encodeURIComponent(game.id)}" target="_blank">⛶ Preview Full Screen</a>
+      </div>
+      <button class="ui-btn ui-btn-coral" data-action="delete">Delete This Game</button>
+    </aside>` : activeBonus ? `
     <aside class="question-list-card bonus-side-card">
       <div class="panel-title">FINAL ROUND</div>
       <div class="category-summary bonus-summary" style="--category-color:#f2a31c">
@@ -938,7 +994,7 @@ function renderEditor() {
     <div id="presentationModalHost"></div>`;
   renderCategoryModal();
   renderPresentationModal();
-  if (isMusic && !activeBonus) setTimeout(initMusicTrimEditor, 0);
+  if (isMusic && !activeBonus && !activeTieBreaker) setTimeout(initMusicTrimEditor, 0);
 }
 function openCategoryModal() {
   const game = selectedGame(); if (!game) return;
@@ -982,13 +1038,15 @@ function renderPresentationModal(){
   if(!presentationModalOpen || !game){ host.innerHTML=''; return; }
   host.innerHTML=`<div class="modal-backdrop" data-presentation-backdrop>
     <section class="category-modal presentation-modal" role="dialog" aria-modal="true" aria-label="Presentation setup">
-      <div class="modal-header"><div><div class="panel-title">PRESENTATION SETUP</div><h2>Theme, Pre-Game & Halftime</h2></div><button class="modal-close" data-action="presentation-close" aria-label="Close">×</button></div>
+      <div class="modal-header"><div><div class="panel-title">PRESENTATION SETUP</div><h2>Theme, Pre-Game & Break Slides</h2></div><button class="modal-close" data-action="presentation-close" aria-label="Close">×</button></div>
       <div class="form-field"><label>Presenter Theme / Background</label><div class="theme-picker">${THEME_LIBRARY.map(t=>`<button class="theme-choice theme-${t.id} ${game.theme===t.id?'selected':''}" data-action="theme-select" data-theme="${t.id}"><span class="theme-preview"></span><strong>${t.name}</strong><small>${t.desc}</small></button>`).join('')}</div></div>
       <div class="presentation-section"><div><h3>Pre-Game Announcement Loop</h3><p>Upload announcement/rules images. They loop continuously until you manually start Category 1.</p></div><label class="ui-btn ui-btn-primary file-button">＋ Add Images<input id="announcementImagesInput" type="file" accept="image/*" multiple hidden></label></div>
       <div class="announcement-options"><label>Seconds per slide<input id="announcementSecondsInput" class="text-input" type="number" min="2" max="60" value="${game.announcementSeconds||8}"></label><span>${game.announcements.length}/12 slides</span></div>
       <div class="announcement-grid">${game.announcements.length?game.announcements.map((a,i)=>`<div class="announcement-thumb"><img src="${a.image}" alt="Announcement ${i+1}"><span>${i+1}. ${esc(a.name||'Announcement')}</span><button data-action="remove-announcement" data-index="${i}" aria-label="Remove announcement">×</button></div>`).join(''):'<div class="empty-media-state">No pre-game images uploaded.</div>'}</div>
       <div class="presentation-section halftime-section"><div><h3>Halftime Screen</h3><p>Optional single image shown after Round 4 answers and before Round 5.</p></div><label class="ui-btn file-button">Upload Halftime Image<input id="halftimeImageInput" type="file" accept="image/*" hidden></label></div>
       ${game.halftimeImage?`<div class="halftime-preview"><img src="${game.halftimeImage}" alt="Halftime preview"><button class="ui-btn ui-btn-small ui-btn-coral" data-action="remove-halftime">Remove Halftime Image</button></div>`:'<div class="empty-media-state">No halftime image selected.</div>'}
+      <div class="presentation-section between-category-section"><div><h3>Between-Category Slides</h3><p>Optional single image after any category. Each slide waits for you to manually advance. After Category 4, this slide appears before the Halftime screen if both are enabled.</p></div></div>
+      <div class="between-slide-grid">${game.betweenCategorySlides.map((slide,i)=>`<div class="between-slide-card"><div class="between-slide-card-head"><strong>After Category ${i+1}</strong><span>Before Category ${i+2}</span></div>${slide.image?`<img src="${slide.image}" alt="Between Category ${i+1} and ${i+2}"><button class="ui-btn ui-btn-small ui-btn-coral" data-action="remove-between-slide" data-index="${i}">Remove</button>`:`<div class="between-slide-empty">No slide</div>`}<label class="ui-btn ui-btn-small file-button">${slide.image?'Replace Image':'Upload Image'}<input id="betweenCategoryImageInput${i}" data-between-index="${i}" type="file" accept="image/*" hidden></label></div>`).join('')}</div>
       <p class="image-storage-note">Images are automatically compressed before they are stored with the game. Large numbers of image-heavy games may reach the browser storage limit.</p>
       <div class="modal-actions"><button class="ui-btn ui-btn-teal" data-action="presentation-close">✓ Done</button></div>
     </section></div>`;
@@ -998,15 +1056,15 @@ function renderPresentationModal(){
 function renderAll() { renderDashboard(); renderEditor(); setView(currentView); }
 function newGame() {
   const game = createBlankGame();
-  games.unshift(game); selectedId = game.id; activeCategory = 0; activeQuestion = 0; activeBonus = false; persist();
+  games.unshift(game); selectedId = game.id; activeCategory = 0; activeQuestion = 0; activeBonus = false; activeTieBreaker = false; persist();
   currentView = 'editor'; renderAll();
   setTimeout(openCategoryModal, 0);
 }
-function openEditor(id) { selectedId=id; activeCategory=0; activeQuestion=0; activeBonus=false; resetHelper(); persist(); currentView='editor'; renderAll(); }
+function openEditor(id) { selectedId=id; activeCategory=0; activeQuestion=0; activeBonus=false; activeTieBreaker=false; resetHelper(); persist(); currentView='editor'; renderAll(); }
 function duplicateGame(id) {
   const source = games.find(g=>g.id===id); if (!source) return;
   const copy = structuredClone(source); copy.id=makeId(); copy.title=`${source.title} Copy`; copy.createdAt=new Date().toISOString(); copy.updatedAt=copy.createdAt;
-  games.unshift(copy); selectedId=copy.id; persist(); setStatus('Duplicated'); currentView='editor'; renderAll();
+  games.unshift(copy); selectedId=copy.id; activeBonus=false; activeTieBreaker=false; persist(); setStatus('Duplicated'); currentView='editor'; renderAll();
 }
 function deleteGame() {
   const game=selectedGame(); if (!game) return;
@@ -1023,11 +1081,16 @@ function clearBonus() {
   game.bonus.question=''; game.bonus.answer='';
   touch(game,'Bonus cleared'); renderEditor();
 }
+function clearTieBreaker() {
+  const game=selectedGame(); if (!game) return;
+  game.tieBreaker.question=''; game.tieBreaker.answer='';
+  touch(game,'Tie breaker cleared'); renderEditor();
+}
 function exportGame() {
   const game=selectedGame(); if (!game) return;
   const triviaFile = {
     format: 'trivia-night-game',
-    formatVersion: 1,
+    formatVersion: 2,
     exportedAt: new Date().toISOString(),
     game
   };
@@ -1061,7 +1124,7 @@ function importGame(file) {
       const data=normalizeGame(sourceGame);
       if (!data.title || !Array.isArray(data.categories) || data.categories.length!==7) throw new Error('Invalid');
       data.id=makeId(); data.createdAt=new Date().toISOString(); data.updatedAt=data.createdAt;
-      games.unshift(data); selectedId=data.id; persist(); activeCategory=0; activeQuestion=0; activeBonus=false; currentView='editor'; renderAll(); setStatus('Trivia game imported');
+      games.unshift(data); selectedId=data.id; persist(); activeCategory=0; activeQuestion=0; activeBonus=false; activeTieBreaker=false; currentView='editor'; renderAll(); setStatus('Trivia game imported');
     } catch { alert('That file could not be imported. Please choose a Trivia Night .trivia file or an older Trivia Night .json export.'); }
   }; reader.readAsText(file);
 }
@@ -1086,6 +1149,10 @@ function saveActiveField(target) {
   if (target.id==='bonusNameInput') game.bonus.name=target.value;
   if (target.id==='bonusQuestionInput') game.bonus.question=target.value;
   if (target.id==='bonusAnswerInput') game.bonus.answer=target.value;
+  if (target.id==='tieBreakerNameInput') game.tieBreaker.name=target.value;
+  if (target.id==='tieBreakerQuestionInput') game.tieBreaker.question=target.value;
+  if (target.id==='tieBreakerAnswerInput') game.tieBreaker.answer=target.value;
+  if (target.id==='tieBreakerEnabled') { game.tieBreaker.enabled=target.checked; touch(game,target.checked?'Tie breaker enabled':'Tie breaker disabled'); renderDashboard(); renderEditor(); return; }
   if (target.id==='bonusEnabled') { game.bonus.enabled=target.checked; touch(game,target.checked?'Bonus enabled':'Bonus disabled'); renderDashboard(); renderEditor(); return; }
   if (target.id==='announcementSecondsInput') { game.announcementSeconds=Math.min(60,Math.max(2,Number(target.value)||8)); touch(game,'Slide timing saved'); return; }
   if (target.id==='categoryDraftName' && categoryDraft) { categoryDraft.name=target.value; const preview=document.querySelector('.modal-preview strong'); if(preview) preview.textContent=(target.value || `Category ${activeCategory+1}`) + (categoryDraft.type==='music'?' ♫':categoryDraft.type==='picture'?' 🖼️':''); return; }
@@ -1095,9 +1162,9 @@ function saveActiveField(target) {
   if (target.id==='categoryDraftTimerSeconds' && categoryDraft) { categoryDraft.timerSeconds=Math.min(300,Math.max(5,Number(target.value)||30)); return; }
   if (target.id==='aiDifficulty') { aiDifficulty=target.value || 'medium'; return; }
   if (target.id==='aiFocus') { aiFocus=target.value; return; }
-  if (!['gameTitle','questionInput','answerInput','youtubeUrlInput','youtubeInInput','youtubeOutInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput'].includes(target.id)) return;
+  if (!['gameTitle','questionInput','answerInput','youtubeUrlInput','youtubeInInput','youtubeOutInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput','tieBreakerNameInput','tieBreakerQuestionInput','tieBreakerAnswerInput'].includes(target.id)) return;
   touch(game);
-  if (target.id==='questionInput' || target.id==='bonusQuestionInput') { const preview=document.querySelector('.mini-question'); if(preview) preview.textContent=target.value || (activeBonus ? 'Your bonus question will appear here.' : 'Your question will appear here.'); }
+  if (target.id==='questionInput' || target.id==='bonusQuestionInput' || target.id==='tieBreakerQuestionInput') { const preview=document.querySelector('.mini-question'); if(preview) preview.textContent=target.value || (activeTieBreaker ? 'Your tie-breaker question will appear here.' : activeBonus ? 'Your bonus question will appear here.' : 'Your question will appear here.'); }
 }
 
 function routeAction(el) {
@@ -1114,6 +1181,7 @@ function routeAction(el) {
   if (action==='ai-generate') generateAIHelper(false);
   if (action==='ai-fill') generateAIHelper(true);
   if (action==='clear-bonus') clearBonus();
+  if (action==='clear-tie-breaker') clearTieBreaker();
   if (action==='save') { if(activeMusicQuestion() && musicTrimDraft) commitMusicTrimMarks('Clip marks saved'); persist(); setStatus('Saved'); renderDashboard(); }
   if (action==='music-trim-load') reloadMusicTrimVideo();
   if (action==='music-trim-play') playMusicTrimClip();
@@ -1124,11 +1192,12 @@ function routeAction(el) {
   if (action==='music-trim-go-out') { const out=trimDraftOut(); if(out)goMusicTrimTo(out); }
   if (action==='music-trim-clear-out') { if(musicTrimDraft){musicTrimDraft.out=0;updateMusicTrimSummary(false);commitMusicTrimMarks('OUT mark cleared');} }
   if (action==='music-trim-save') { syncMusicTrimDraftFromInputs(); commitMusicTrimMarks('Clip marks saved'); }
-  if (action==='category') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=false; activeCategory=Number(el.dataset.index); activeQuestion=0; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
-  if (action==='question') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=false; activeQuestion=Number(el.dataset.index); resetHelper(); renderEditor(); }
-  if (action==='bonus') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=true; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
-  if (action==='categories') { if (!selectedGame()) return; saveActiveMusicTrimDraft('Clip marks saved'); currentView='editor'; activeBonus=false; activeCategory=0; renderAll(); openCategoryModal(); }
-  if (action==='questions') { if (!selectedGame()) return; saveActiveMusicTrimDraft('Clip marks saved'); currentView='editor'; activeBonus=false; activeQuestion=0; renderAll(); }
+  if (action==='category') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=false; activeTieBreaker=false; activeCategory=Number(el.dataset.index); activeQuestion=0; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
+  if (action==='question') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=false; activeTieBreaker=false; activeQuestion=Number(el.dataset.index); resetHelper(); renderEditor(); }
+  if (action==='bonus') { saveActiveMusicTrimDraft('Clip marks saved'); activeTieBreaker=false; activeBonus=true; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
+  if (action==='tie-breaker') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=false; activeTieBreaker=true; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
+  if (action==='categories') { if (!selectedGame()) return; saveActiveMusicTrimDraft('Clip marks saved'); currentView='editor'; activeBonus=false; activeTieBreaker=false; activeCategory=0; renderAll(); openCategoryModal(); }
+  if (action==='questions') { if (!selectedGame()) return; saveActiveMusicTrimDraft('Clip marks saved'); currentView='editor'; activeBonus=false; activeTieBreaker=false; activeQuestion=0; renderAll(); }
   if (action==='edit-category') { closePresentationModal(); openCategoryModal(); }
   if (action==='category-cancel') closeCategoryModal();
   if (action==='presentation-settings') { closeCategoryModal(); openPresentationModal(); }
@@ -1145,6 +1214,11 @@ function routeAction(el) {
   if (action==='remove-halftime') {
     const game=selectedGame(); if(!game) return;
     game.halftimeImage=''; game.halftimeName=''; touch(game,'Halftime image removed'); renderPresentationModal();
+  }
+  if (action==='remove-between-slide') {
+    const game=selectedGame(); if(!game) return;
+    const i=Number(el.dataset.index);
+    if(Number.isInteger(i) && i>=0 && i<6){ game.betweenCategorySlides[i]={image:'',name:`Between Category ${i+1} & ${i+2}`}; touch(game,`Between-category slide ${i+1} removed`); renderPresentationModal(); }
   }
   if (action==='remove-picture') {
     const game=selectedGame(); if(!game) return;
@@ -1196,6 +1270,18 @@ async function handleImageInput(target){
       if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
       else setStatus('Halftime image added');
       renderPresentationModal();
+    }
+    if(target.id.startsWith('betweenCategoryImageInput') && target.files[0]){
+      const i=Number(target.dataset.betweenIndex ?? target.id.replace('betweenCategoryImageInput',''));
+      if(Number.isInteger(i) && i>=0 && i<6){
+        const file=target.files[0];
+        setStatus(`Processing slide after Category ${i+1}…`);
+        const image=await compressImageFile(file,1600,1000,.84);
+        game.betweenCategorySlides[i]={image,name:file.name.replace(/\.[^.]+$/,'') || `Between Category ${i+1} & ${i+2}`};
+        if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
+        else setStatus(`Slide after Category ${i+1} added`);
+        renderPresentationModal();
+      }
     }
     if(target.id==='pictureImageInput' && target.files[0]){
       // Snapshot the file and question before any async image work. Returning from the

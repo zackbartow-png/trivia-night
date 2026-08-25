@@ -749,3 +749,36 @@ button { color: inherit; }
 .presenter-page .question-timer.timer-warning small {
   font-weight:1000;
 }
+
+/* Optional tie-breaker final round */
+.tiebreaker-tab { border-top-color:#08b7a7 !important; }
+.tiebreaker-tab.active { background:linear-gradient(180deg,#32cfc2,#08b7a7) !important; border-color:#08b7a7 !important; color:white !important; box-shadow:0 6px 16px rgba(8,183,167,.24) !important; }
+.tiebreaker-tab.bonus-disabled:not(.active) { opacity:.62; }
+
+/* Optional images between categories */
+.between-category-section { align-items:flex-start; }
+.between-slide-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.between-slide-card { min-width:0; display:grid; gap:8px; padding:10px; border:1px solid var(--line); border-radius:14px; background:#f9fbfd; }
+.between-slide-card-head { display:grid; gap:2px; }
+.between-slide-card-head strong { font-size:12px; color:var(--navy); }
+.between-slide-card-head span { font-size:9px; color:var(--muted); font-weight:750; }
+.between-slide-card img { width:100%; height:105px; object-fit:contain; border-radius:9px; background:#eef3f8; border:1px solid #dbe4ed; }
+.between-slide-empty { height:105px; display:grid; place-items:center; border:1px dashed #c7d3df; border-radius:9px; color:var(--muted); font-size:10px; font-weight:800; background:white; }
+.between-slide-card .file-button { justify-content:center; }
+.between-category-slide { min-height:min(78vh,780px); }
+
+@media (max-width:1050px) {
+  .between-slide-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:700px) {
+  .between-slide-grid { grid-template-columns:1fr; }
+}
+.tiebreaker-side-card,
+.tiebreaker-editor-card,
+.tiebreaker-preview-card { border-top-color:#08b7a7 !important; }
+.tiebreaker-toggle-row input:checked + .toggle-switch { background:#08b7a7; }
+.tie-breaker-slide .bonus-kicker,
+.tie-breaker-slide .bonus-answer-label { color:#068d81; }
+.tie-breaker-slide .bonus-star-wrap { background:linear-gradient(180deg,#7fe0d7,#08b7a7); box-shadow:0 14px 0 rgba(8,183,167,.15),0 22px 45px rgba(16,42,86,.12); }
+.tie-breaker-slide .bonus-start-button { background:linear-gradient(180deg,#32cfc2,#08b7a7); color:white; box-shadow:0 7px 0 #078f82,0 14px 25px rgba(8,183,167,.18); }
+.tie-breaker-slide .bonus-answer-value { background:#eafffb; border-color:#08b7a7; box-shadow:0 12px 35px rgba(8,183,167,.15); }

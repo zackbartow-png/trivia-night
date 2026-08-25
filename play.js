@@ -2,6 +2,7 @@ const STORAGE_KEY='triviaNightGamesV1';
 const DEFAULT_ICONS=['🍿','⚾','🎵','🏛️','🍕','🧪','❓'];
 const DEFAULT_COLORS=['#36a8f5','#08b7a7','#ff685f','#ffbf2f','#9465df','#1fc8c0','#f2a31c'];
 const BONUS_COLOR='#f2a31c';
+const TIE_COLOR='#08b7a7';
 const gameId=new URLSearchParams(location.search).get('game');
 let games=[]; try { games=JSON.parse(localStorage.getItem(STORAGE_KEY))||[]; } catch {}
 const game=games.find(g=>g.id===gameId)||games[0];
@@ -33,6 +34,13 @@ function bonusEnabled(){ return Boolean(game?.bonus?.enabled); }
 function bonusName(){ return game?.bonus?.name || 'Bonus Round'; }
 function bonusQuestion(){ return game?.bonus?.question || '[Bonus question not entered]'; }
 function bonusAnswer(){ return game?.bonus?.answer || '[Bonus answer not entered]'; }
+function tieBreakerEnabled(){ return Boolean(game?.tieBreaker?.enabled); }
+function tieBreakerName(){ return game?.tieBreaker?.name || 'Tie Breaker'; }
+function tieBreakerQuestion(){ return game?.tieBreaker?.question || '[Tie-breaker question not entered]'; }
+function tieBreakerAnswer(){ return game?.tieBreaker?.answer || '[Tie-breaker answer not entered]'; }
+function betweenCategorySlides(){ return Array.isArray(game?.betweenCategorySlides) ? game.betweenCategorySlides : []; }
+function betweenCategorySlide(i){ const slide=betweenCategorySlides()[i]; return slide?.image ? slide : null; }
+function hasBetweenCategorySlide(i){ return Boolean(betweenCategorySlide(i)); }
 function announcements(){ return Array.isArray(game?.announcements)?game.announcements.filter(x=>x?.image):[]; }
 function hasHalftime(){ return Boolean(game?.halftimeImage); }
 function clearTimer(){ if(timerHandle){clearInterval(timerHandle);timerHandle=null;} }
@@ -162,9 +170,16 @@ function render(resetAutomation=true){
       <div class="answers-subheading">${icon} ${esc(name)}${type==='music'?' · MUSIC ROUND':type==='picture'?' · PICTURE ROUND':''}</div>
       <div class="answer-grid">${cat.questions.map((q,i)=>`<div class="answer-row"><div class="answer-number" style="background:${color}">${i+1}</div><div class="answer-text">${esc(q.answer || '[Answer not entered]')}</div></div>`).join('')}</div>
     </section>`;
-    if(categoryIndex===3 && hasHalftime()) nextBtn.querySelector('span').textContent='Halftime';
+    if(categoryIndex<6 && hasBetweenCategorySlide(categoryIndex)) nextBtn.querySelector('span').textContent='Show Break Slide';
+    else if(categoryIndex===3 && hasHalftime()) nextBtn.querySelector('span').textContent='Halftime';
     else if(categoryIndex<6) nextBtn.querySelector('span').textContent='Next Category';
-    else nextBtn.querySelector('span').textContent=bonusEnabled()?bonusName():'Finish Game';
+    else nextBtn.querySelector('span').textContent=bonusEnabled()?bonusName():(tieBreakerEnabled()?tieBreakerName():'Finish Game');
+  } else if(phase==='betweenCategory'){
+    const slide=betweenCategorySlide(categoryIndex);
+    if(!slide){ phase=(categoryIndex===3 && hasHalftime())?'halftime':'intro'; if(phase==='intro'){categoryIndex=Math.min(6,categoryIndex+1);questionIndex=0;} render(); return; }
+    progress.textContent=`Break · Between Categories ${categoryIndex+1} & ${categoryIndex+2}`;
+    stage.innerHTML=`<section class="slide media-slide between-category-slide"><img src="${slide.image}" alt="Between Category ${categoryIndex+1} and Category ${categoryIndex+2}"></section>`;
+    nextBtn.querySelector('span').textContent=(categoryIndex===3 && hasHalftime())?'Halftime':`Start Category ${categoryIndex+2}`;
   } else if(phase==='halftime'){
     progress.textContent='Halftime · Between Rounds 4 & 5';
     stage.innerHTML=`<section class="slide media-slide halftime-slide"><img src="${game.halftimeImage}" alt="Halftime"></section>`;
@@ -196,6 +211,34 @@ function render(resetAutomation=true){
       <div class="bonus-answer-question">${esc(bonusQuestion())}</div>
       <div class="bonus-answer-value">${esc(bonusAnswer())}</div>
     </section>`;
+    nextBtn.querySelector('span').textContent=tieBreakerEnabled()?tieBreakerName():'Finish Game';
+  } else if(phase==='tieBreakerIntro'){
+    progress.textContent=`${tieBreakerName()} · Ready`;
+    stage.innerHTML=`<section class="slide bonus-intro-slide tie-breaker-slide confetti-field" style="--slide-color:${TIE_COLOR}">
+      <div class="intro-logo"><span>TRIVIA</span><b>★ NIGHT ★</b></div>
+      <div class="bonus-kicker">TIE BREAKER</div>
+      <h1 class="bonus-title bonus-custom-title">${esc(tieBreakerName()).toUpperCase()}</h1>
+      <div class="bonus-star-wrap"><div class="bonus-star">🎯</div></div>
+      <div class="bonus-subtitle">One question to settle the tie.</div>
+      <button class="intro-stage-button bonus-start-button" data-presenter-next>SHOW TIE BREAKER ▶</button>
+    </section>`;
+    nextBtn.querySelector('span').textContent='Show Question';
+  } else if(phase==='tieBreakerQuestion'){
+    progress.textContent=`${tieBreakerName()} · Question`;
+    stage.innerHTML=`<section class="slide bonus-question-slide tie-breaker-slide confetti-field" style="--slide-color:${TIE_COLOR}">
+      <div class="slide-category bonus-ribbon" style="background:${TIE_COLOR}">🎯 ${esc(tieBreakerName()).toUpperCase()}</div>
+      <div class="slide-count">TIE BREAKER</div>
+      <div class="question-star left">★</div><div class="question-star right">★</div>
+      <div class="slide-question">${esc(tieBreakerQuestion())}</div>
+    </section>`;
+    nextBtn.querySelector('span').textContent='Show Answer';
+  } else if(phase==='tieBreakerAnswer'){
+    progress.textContent=`${tieBreakerName()} · Answer`;
+    stage.innerHTML=`<section class="slide bonus-answer-slide tie-breaker-slide confetti-field" style="--slide-color:${TIE_COLOR}">
+      <div class="bonus-answer-label">🎯 ${esc(tieBreakerName()).toUpperCase()} ANSWER</div>
+      <div class="bonus-answer-question">${esc(tieBreakerQuestion())}</div>
+      <div class="bonus-answer-value">${esc(tieBreakerAnswer())}</div>
+    </section>`;
     nextBtn.querySelector('span').textContent='Finish Game';
   } else {
     progress.textContent='Game Complete';
@@ -212,15 +255,24 @@ function next(){
   else if(phase==='question'){ if(questionIndex<9) questionIndex++; else phase='pass'; }
   else if(phase==='pass') phase='answers';
   else if(phase==='answers'){
-    if(categoryIndex===3 && hasHalftime()) phase='halftime';
+    if(categoryIndex<6 && hasBetweenCategorySlide(categoryIndex)) phase='betweenCategory';
+    else if(categoryIndex===3 && hasHalftime()) phase='halftime';
     else if(categoryIndex<6){ categoryIndex++; questionIndex=0; phase='intro'; }
     else if(bonusEnabled()) phase='bonusIntro';
+    else if(tieBreakerEnabled()) phase='tieBreakerIntro';
     else phase='complete';
+  }
+  else if(phase==='betweenCategory'){
+    if(categoryIndex===3 && hasHalftime()) phase='halftime';
+    else { categoryIndex=Math.min(6,categoryIndex+1); questionIndex=0; phase='intro'; }
   }
   else if(phase==='halftime'){ categoryIndex=4; questionIndex=0; phase='intro'; }
   else if(phase==='bonusIntro') phase='bonusQuestion';
   else if(phase==='bonusQuestion') phase='bonusAnswer';
-  else if(phase==='bonusAnswer') phase='complete';
+  else if(phase==='bonusAnswer') phase=tieBreakerEnabled()?'tieBreakerIntro':'complete';
+  else if(phase==='tieBreakerIntro') phase='tieBreakerQuestion';
+  else if(phase==='tieBreakerQuestion') phase='tieBreakerAnswer';
+  else if(phase==='tieBreakerAnswer') phase='complete';
   else { categoryIndex=0; questionIndex=0; announcementIndex=0; phase=announcements().length?'pregame':'intro'; }
   render();
 }
@@ -230,8 +282,12 @@ function back(){
   if(phase==='pregame') return;
   if(phase==='intro'){
     if(categoryIndex===0 && announcements().length){ announcementIndex=0; phase='pregame'; }
-    else if(categoryIndex===4 && hasHalftime()){ categoryIndex=3; phase='halftime'; }
-    else if(categoryIndex>0){ categoryIndex--; questionIndex=9; phase='answers'; }
+    else if(categoryIndex>0){
+      const previousIndex=categoryIndex-1;
+      if(categoryIndex===4 && hasHalftime()){ categoryIndex=3; phase='halftime'; }
+      else if(hasBetweenCategorySlide(previousIndex)){ categoryIndex=previousIndex; phase='betweenCategory'; }
+      else { categoryIndex=previousIndex; questionIndex=9; phase='answers'; }
+    }
   } else if(phase==='question'){
     if(questionIndex>0) questionIndex--;
     else phase='intro';
@@ -239,16 +295,28 @@ function back(){
     phase='question'; questionIndex=9;
   } else if(phase==='answers'){
     phase='pass';
+  } else if(phase==='betweenCategory'){
+    phase='answers'; questionIndex=9;
   } else if(phase==='halftime'){
-    categoryIndex=3; phase='answers';
+    categoryIndex=3;
+    if(hasBetweenCategorySlide(3)) phase='betweenCategory';
+    else phase='answers';
   } else if(phase==='bonusIntro'){
     categoryIndex=6; phase='answers';
   } else if(phase==='bonusQuestion'){
     phase='bonusIntro';
   } else if(phase==='bonusAnswer'){
     phase='bonusQuestion';
-  } else if(phase==='complete'){
+  } else if(phase==='tieBreakerIntro'){
     if(bonusEnabled()) phase='bonusAnswer';
+    else { phase='answers'; categoryIndex=6; }
+  } else if(phase==='tieBreakerQuestion'){
+    phase='tieBreakerIntro';
+  } else if(phase==='tieBreakerAnswer'){
+    phase='tieBreakerQuestion';
+  } else if(phase==='complete'){
+    if(tieBreakerEnabled()) phase='tieBreakerAnswer';
+    else if(bonusEnabled()) phase='bonusAnswer';
     else { phase='answers'; categoryIndex=6; }
   }
   render();
