@@ -62,12 +62,23 @@
     const label=cat.type==='music'?'MUSIC ROUND':cat.type==='picture'?'PICTURE ROUND':'TRIVIA ROUND'; ctx.fillText(label,x+20,y+88);
     drawAnswerRows(ctx,x,y,CARD_W,CARD_H,accent);
   }
+  function drawStar(ctx,cx,cy,outer=11,inner=5.2,fill='#f2a31c'){
+    ctx.save(); ctx.beginPath();
+    for(let i=0;i<10;i++){
+      const r=i%2===0?outer:inner;
+      const a=-Math.PI/2+i*Math.PI/5;
+      const px=cx+Math.cos(a)*r, py=cy+Math.sin(a)*r;
+      if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); ctx.restore();
+  }
+
   function drawBonusCard(ctx,bonus,x,y){
     const accent='#f2a31c';
     ctx.fillStyle='#fff'; roundRect(ctx,x,y,CARD_W,CARD_H,20); ctx.fill(); ctx.strokeStyle='#e8d38d'; ctx.lineWidth=2; ctx.stroke();
     ctx.save(); roundRect(ctx,x,y,CARD_W,CARD_H,20); ctx.clip(); ctx.fillStyle='#ffbf2f'; ctx.fillRect(x,y,CARD_W,70); ctx.restore();
     ctx.fillStyle='#102a56'; ctx.textBaseline='middle'; ctx.textAlign='left'; ctx.font='900 17px Inter, Arial, sans-serif'; ctx.fillText('FINAL ROUND',x+20,y+35);
-    ctx.font='31px "Segoe UI Emoji", "Apple Color Emoji", sans-serif'; ctx.fillText('⭐',x+133,y+35);
+    drawStar(ctx,x+151,y+35,10.5,5,'#f2a31c');
     const name=String(bonus?.name||'Bonus Round').toUpperCase(); const fs=fitText(ctx,name,CARD_W-205,27,16,900); ctx.font=`900 ${fs}px Inter, Arial, sans-serif`; ctx.textAlign='right'; ctx.fillText(name,x+CARD_W-20,y+35);
     ctx.textAlign='left'; ctx.fillStyle='#697a96'; ctx.font='900 13px Inter, Arial, sans-serif'; ctx.fillText('ONE FINAL ANSWER',x+20,y+91);
     const cy=y+155; ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(x+33,cy,18,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='900 18px Inter, Arial, sans-serif'; ctx.fillText('1',x+33,cy+1);
