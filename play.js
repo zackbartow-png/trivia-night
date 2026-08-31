@@ -89,6 +89,40 @@ function roundDefaultSubtitle(cat){
 }
 function timerMarkup(cat){ return timerEnabled(cat)?`<div class="question-timer" aria-label="Question timer"><span id="questionTimerValue">${timerSeconds(cat)}</span><small>SEC</small></div>`:''; }
 
+
+// Keep long questions inside the usable projector area at any resolution.
+// The font starts at the theme/CSS size, then steps down only when needed.
+function fitPresenterQuestions(){
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('.slide-question').forEach(el=>{
+      const slide=el.closest('.slide');
+      if(!slide) return;
+      el.style.fontSize='';
+      el.style.maxHeight='';
+
+      const slideRect=slide.getBoundingClientRect();
+      let topSafe=Math.max(82, slideRect.height*0.12);
+      [slide.querySelector('.slide-category'), slide.querySelector('.slide-count'), slide.querySelector('.question-timer')].forEach(node=>{
+        if(!node) return;
+        const r=node.getBoundingClientRect();
+        topSafe=Math.max(topSafe, r.bottom-slideRect.top+18);
+      });
+      const bottomSafe=Math.max(22, slideRect.height*0.035);
+      const availableHeight=Math.max(130, slideRect.height-topSafe-bottomSafe);
+      el.style.maxHeight=`${availableHeight}px`;
+
+      let size=parseFloat(getComputedStyle(el).fontSize)||82;
+      const minSize=slideRect.height<560?24:slideRect.height<700?28:30;
+      let guard=0;
+      while(size>minSize && el.scrollHeight>availableHeight+1 && guard<40){
+        size-=2;
+        el.style.fontSize=`${size}px`;
+        guard++;
+      }
+    });
+  });
+}
+
 function render(resetAutomation=true){
   if(resetAutomation) clearAutomation();
   if(!valid()){
@@ -245,6 +279,7 @@ function render(resetAutomation=true){
     stage.innerHTML=`<section class="slide complete-slide confetti-field"><div class="complete-trophy">🏆</div><h1>TRIVIA<br><span>COMPLETE!</span></h1><p>Thanks for playing.</p></section>`;
     nextBtn.querySelector('span').textContent='Restart Game';
   }
+  fitPresenterQuestions();
   broadcastPresenterState();
 }
 function next(){
@@ -351,6 +386,8 @@ window.addEventListener('storage',e=>{
 });
 nextBtn.addEventListener('click',next); backBtn.addEventListener('click',back); fullscreenBtn.addEventListener('click',fullscreen);
 stage.addEventListener('click',e=>{ if(e.target.closest('[data-presenter-next]')) next(); });
+window.addEventListener('resize',()=>fitPresenterQuestions());
+document.addEventListener('fullscreenchange',()=>fitPresenterQuestions());
 document.addEventListener('keydown',e=>{
   if(['ArrowRight','Enter',' '].includes(e.key)){e.preventDefault();next();}
   if(e.key==='ArrowLeft'){e.preventDefault();back();}

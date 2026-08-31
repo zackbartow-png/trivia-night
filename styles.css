@@ -782,3 +782,56 @@ button { color: inherit; }
 .tie-breaker-slide .bonus-star-wrap { background:linear-gradient(180deg,#7fe0d7,#08b7a7); box-shadow:0 14px 0 rgba(8,183,167,.15),0 22px 45px rgba(16,42,86,.12); }
 .tie-breaker-slide .bonus-start-button { background:linear-gradient(180deg,#32cfc2,#08b7a7); color:white; box-shadow:0 7px 0 #078f82,0 14px 25px rgba(8,183,167,.18); }
 .tie-breaker-slide .bonus-answer-value { background:#eafffb; border-color:#08b7a7; box-shadow:0 12px 35px rgba(8,183,167,.15); }
+
+
+/* Final-round answer contrast: never inherit a light theme text color. */
+.presenter-page .bonus-answer-slide .bonus-answer-value,
+.presenter-page .tie-breaker-slide .bonus-answer-value {
+  color:#111827 !important;
+  background:#ffffff !important;
+}
+.presenter-page .bonus-answer-slide .bonus-answer-question,
+.presenter-page .tie-breaker-slide .bonus-answer-question {
+  color:#334155 !important;
+}
+.presenter-page .bonus-answer-slide .bonus-answer-label {
+  font-weight:1000;
+}
+
+/* Projector-safe question layout. Long questions are also auto-fit by play.js. */
+.presenter-page .slide-question {
+  max-width:min(94vw,1320px);
+  max-height:72%;
+  overflow:hidden;
+  line-height:1.04;
+  text-wrap:balance;
+}
+.presenter-page .slide-category {
+  max-width:56%;
+  overflow-wrap:anywhere;
+}
+.presenter-page .slide-count {
+  max-width:38%;
+  text-align:right;
+}
+
+@media (max-height:760px) {
+  .presenter-stage { padding:5px 7px; }
+  .slide { padding:3vh 3vw; border-radius:14px; }
+  .slide-category { top:12px; padding:8px 18px; min-width:160px; font-size:clamp(15px,1.8vw,24px); }
+  .slide-count { top:18px; right:18px; font-size:clamp(13px,1.25vw,19px); }
+  .question-timer { top:52px; right:18px; transform:scale(.86); transform-origin:top right; }
+  .slide-question { font-size:clamp(28px,4.5vw,62px); line-height:1.02; }
+  .question-star { opacity:.45; transform:scale(.72); }
+  .bonus-answer-slide { padding:4vh 6vw; }
+  .bonus-answer-question { margin-bottom:14px; font-size:clamp(18px,2.1vw,30px); }
+  .bonus-answer-value { padding:16px 24px; font-size:clamp(34px,5.2vw,68px); }
+}
+
+@media (max-height:620px) {
+  .slide-category { top:8px; padding:6px 14px; font-size:clamp(13px,1.55vw,20px); }
+  .slide-count { top:12px; right:14px; font-size:clamp(12px,1.1vw,17px); }
+  .question-timer { top:42px; right:14px; transform:scale(.72); }
+  .slide-question { font-size:clamp(24px,4vw,50px); line-height:1; }
+  .question-star { display:none; }
+}
