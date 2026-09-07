@@ -835,3 +835,10 @@ button { color: inherit; }
   .slide-question { font-size:clamp(24px,4vw,50px); line-height:1; }
   .question-star { display:none; }
 }
+
+/* Vercel Blob cloud-image storage status */
+.cloud-storage-note { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:14px 0 4px; padding:13px 14px; border:1px solid #b9ddef; border-radius:14px; background:#f1faff; }
+.cloud-storage-note > div { display:grid; gap:3px; }
+.cloud-storage-note strong { color:var(--navy); font-size:12px; }
+.cloud-storage-note span { color:var(--muted); font-size:10px; line-height:1.4; font-weight:700; }
+@media (max-width:760px) { .cloud-storage-note { align-items:stretch; flex-direction:column; } }

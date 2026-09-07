@@ -1,0 +1,30 @@
+TRIVIA NIGHT — VERCEL BLOB IMAGE STORAGE SETUP
+
+1. Upload this patch to the existing GitHub trivia-night repository:
+   - app.js
+   - styles.css
+   - package.json
+   - api/image-upload.mjs  (keep it inside the api folder)
+
+2. In Vercel, open the existing Trivia Night project.
+
+3. Open Storage and create/connect a PUBLIC Vercel Blob store to this project.
+   Vercel should add BLOB_READ_WRITE_TOKEN to the project automatically.
+
+4. Redeploy the project after the Blob store is connected.
+
+5. Test the connection by opening:
+   /api/image-upload
+   It should report configured:true.
+
+6. Open a Trivia game and upload a new Picture Round image.
+   New images are compressed in the browser, uploaded to Vercel Blob, and only the URL is saved in the game.
+
+7. Existing games remain compatible. In Presentation Setup, if the game still contains older base64 images, use:
+   Move Existing Images to Cloud
+   This converts Picture Round, pre-show, halftime, and between-category images to Blob URLs and frees browser storage.
+
+NOTES
+- Presenter slides use the image URL in the same <img> element as before, so slide layout/display behavior is unchanged.
+- .trivia export/import keeps the Blob image URLs, so shared games can still display the images online.
+- Removing/replacing an image does not delete the old Blob automatically, to avoid breaking copies of .trivia files that may still reference it.

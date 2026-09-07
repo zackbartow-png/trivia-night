@@ -349,7 +349,7 @@ function persist() {
   } catch (error) {
     console.error(error);
     const el=document.querySelector('#status');
-    if(el) el.textContent='Storage full — remove or replace some uploaded images.';
+    if(el) el.textContent='Storage full — move existing embedded images to cloud or remove an image-heavy game.';
     return false;
   }
 }
@@ -767,7 +767,7 @@ function defaultRoundDescription(cat){
   if(cat.type==='picture') return '🖼️ Picture Round · 10 images';
   return 'Get ready for 10 questions!';
 }
-function compressImageFile(file, maxW=1280, maxH=900, quality=.8){
+function compressImageFileToBlob(file, maxW=1280, maxH=900, quality=.82, maxBytes=3200000){
   return new Promise((resolve,reject)=>{
     if(!file) return reject(new Error('Please choose an image file.'));
     const type=String(file.type||'').toLowerCase();
@@ -780,19 +780,113 @@ function compressImageFile(file, maxW=1280, maxH=900, quality=.8){
       const img=new Image();
       img.onerror=()=>reject(new Error('Could not open that image. Try JPG, JPEG, PNG, or WEBP.'));
       img.onload=()=>{
-        const scale=Math.min(1,maxW/img.width,maxH/img.height);
-        const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
-        const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
-        const ctx=canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
-        ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
-        resolve(canvas.toDataURL('image/jpeg',quality));
+        let scale=Math.min(1,maxW/img.width,maxH/img.height);
+        let q=Math.min(.94,Math.max(.62,Number(quality)||.82));
+        let attempts=0;
+        const encode=()=>{
+          const w=Math.max(1,Math.round(img.width*scale));
+          const h=Math.max(1,Math.round(img.height*scale));
+          const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+          const ctx=canvas.getContext('2d');
+          ctx.imageSmoothingEnabled=true;
+          if('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality='high';
+          ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+          canvas.toBlob(blob=>{
+            if(!blob) return reject(new Error('Could not prepare that image for upload.'));
+            attempts++;
+            if(blob.size<=maxBytes || attempts>=5) return resolve(blob);
+            if(q>.72) q=Math.max(.7,q-.08);
+            else scale*=.86;
+            encode();
+          },'image/jpeg',q);
+        };
+        encode();
       };
       img.src=reader.result;
     };
     reader.readAsDataURL(file);
   });
+}
+
+function safeCloudName(value='image'){
+  return String(value||'image').replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,70) || 'image';
+}
+function isEmbeddedImage(value=''){ return /^data:image\//i.test(String(value||'')); }
+function countEmbeddedImages(game){
+  if(!game) return 0;
+  let count=0;
+  for(const cat of game.categories||[]) for(const q of cat.questions||[]) if(isEmbeddedImage(q.image)) count++;
+  for(const item of game.announcements||[]) if(isEmbeddedImage(item.image)) count++;
+  if(isEmbeddedImage(game.halftimeImage)) count++;
+  for(const slide of game.betweenCategorySlides||[]) if(isEmbeddedImage(slide.image)) count++;
+  return count;
+}
+async function dataUrlToBlob(dataUrl){
+  const response=await fetch(dataUrl);
+  if(!response.ok) throw new Error('Could not read an existing embedded image.');
+  return response.blob();
+}
+async function uploadImageBlobToCloud(blob,{gameId,purpose='image',filename='image.jpg'}={}){
+  if(!(blob instanceof Blob)) throw new Error('Could not prepare the image for cloud storage.');
+  const form=new FormData();
+  form.append('file',blob,`${safeCloudName(filename)}.jpg`);
+  form.append('gameId',String(gameId||'game'));
+  form.append('purpose',safeCloudName(purpose));
+  let response;
+  try { response=await fetch('/api/image-upload',{method:'POST',body:form}); }
+  catch { throw new Error('Could not reach cloud image storage. Check your internet connection and try again.'); }
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok || !data?.url){
+    throw new Error(data?.error || 'Cloud image upload failed. Make sure Vercel Blob is connected to this project.');
+  }
+  return data.url;
+}
+async function prepareAndUploadImage(file,{maxW,maxH,quality,maxBytes,gameId,purpose}={}){
+  const blob=await compressImageFileToBlob(file,maxW,maxH,quality,maxBytes);
+  return uploadImageBlobToCloud(blob,{gameId,purpose,filename:file?.name||purpose||'image'});
+}
+async function migrateSelectedGameImagesToCloud(){
+  const game=selectedGame(); if(!game) return;
+  const total=countEmbeddedImages(game);
+  if(!total){ setStatus('All images in this game are already stored in the cloud'); renderPresentationModal(); return; }
+  let completed=0;
+  const migrate=async (getValue,setValue,purpose,filename)=>{
+    const value=getValue();
+    if(!isEmbeddedImage(value)) return;
+    setStatus(`Moving existing images to cloud… ${completed+1}/${total}`);
+    const blob=await dataUrlToBlob(value);
+    const url=await uploadImageBlobToCloud(blob,{gameId:game.id,purpose,filename});
+    setValue(url);
+    completed++;
+    game.updatedAt=new Date().toISOString();
+    persist(); // Each successful replacement makes localStorage smaller.
+  };
+  try{
+    for(let ci=0;ci<(game.categories||[]).length;ci++){
+      const cat=game.categories[ci];
+      for(let qi=0;qi<(cat.questions||[]).length;qi++){
+        const q=cat.questions[qi];
+        await migrate(()=>q.image,v=>q.image=v,`picture-c${ci+1}-q${qi+1}`,`picture-c${ci+1}-q${qi+1}.jpg`);
+      }
+    }
+    for(let i=0;i<(game.announcements||[]).length;i++){
+      const item=game.announcements[i];
+      await migrate(()=>item.image,v=>item.image=v,`announcement-${i+1}`,`${item.name||`announcement-${i+1}`}.jpg`);
+    }
+    await migrate(()=>game.halftimeImage,v=>game.halftimeImage=v,'halftime',`${game.halftimeName||'halftime'}.jpg`);
+    for(let i=0;i<(game.betweenCategorySlides||[]).length;i++){
+      const slide=game.betweenCategorySlides[i];
+      await migrate(()=>slide.image,v=>slide.image=v,`between-category-${i+1}`,`${slide.name||`between-category-${i+1}`}.jpg`);
+    }
+    persist();
+    setStatus(`${completed} existing image${completed===1?'':'s'} moved to cloud storage`);
+    renderDashboard(); renderEditor(); renderPresentationModal();
+  }catch(error){
+    console.error(error);
+    persist();
+    alert(`${error.message||'Could not finish moving images to cloud.'}\n\n${completed} of ${total} image${total===1?'':'s'} were moved successfully. You can run the migration again to continue.`);
+    renderPresentationModal();
+  }
 }
 
 function renderEditor() {
@@ -1047,7 +1141,7 @@ function renderPresentationModal(){
       ${game.halftimeImage?`<div class="halftime-preview"><img src="${game.halftimeImage}" alt="Halftime preview"><button class="ui-btn ui-btn-small ui-btn-coral" data-action="remove-halftime">Remove Halftime Image</button></div>`:'<div class="empty-media-state">No halftime image selected.</div>'}
       <div class="presentation-section between-category-section"><div><h3>Between-Category Slides</h3><p>Optional single image after any category. Each slide waits for you to manually advance. After Category 4, this slide appears before the Halftime screen if both are enabled.</p></div></div>
       <div class="between-slide-grid">${game.betweenCategorySlides.map((slide,i)=>`<div class="between-slide-card"><div class="between-slide-card-head"><strong>After Category ${i+1}</strong><span>Before Category ${i+2}</span></div>${slide.image?`<img src="${slide.image}" alt="Between Category ${i+1} and ${i+2}"><button class="ui-btn ui-btn-small ui-btn-coral" data-action="remove-between-slide" data-index="${i}">Remove</button>`:`<div class="between-slide-empty">No slide</div>`}<label class="ui-btn ui-btn-small file-button">${slide.image?'Replace Image':'Upload Image'}<input id="betweenCategoryImageInput${i}" data-between-index="${i}" type="file" accept="image/*" hidden></label></div>`).join('')}</div>
-      <p class="image-storage-note">Images are automatically compressed before they are stored with the game. Large numbers of image-heavy games may reach the browser storage limit.</p>
+      ${countEmbeddedImages(game)?`<div class="cloud-storage-note"><div><strong>☁ Move Existing Images to Cloud</strong><span>${countEmbeddedImages(game)} older embedded image${countEmbeddedImages(game)===1?'':'s'} still use browser storage. Move them to Vercel Blob to free space.</span></div><button class="ui-btn ui-btn-primary ui-btn-small" data-action="migrate-cloud-images">Move ${countEmbeddedImages(game)} Image${countEmbeddedImages(game)===1?'':'s'}</button></div>`:`<p class="image-storage-note">☁ New images are stored in Vercel Blob cloud storage. Existing cloud image URLs remain part of exported .trivia files.</p>`}
       <div class="modal-actions"><button class="ui-btn ui-btn-teal" data-action="presentation-close">✓ Done</button></div>
     </section></div>`;
 }
@@ -1202,6 +1296,7 @@ function routeAction(el) {
   if (action==='category-cancel') closeCategoryModal();
   if (action==='presentation-settings') { closeCategoryModal(); openPresentationModal(); }
   if (action==='presentation-close') { closePresentationModal(); renderEditor(); }
+  if (action==='migrate-cloud-images') { migrateSelectedGameImagesToCloud(); }
   if (action==='theme-select') {
     const game=selectedGame(); if(!game) return;
     if(THEME_LIBRARY.some(t=>t.id===el.dataset.theme)) game.theme=el.dataset.theme;
@@ -1254,55 +1349,50 @@ async function handleImageInput(target){
       const remaining=Math.max(0,12-game.announcements.length);
       const files=[...target.files].slice(0,remaining);
       if(!files.length) return;
-      setStatus('Processing images…');
+      setStatus('Uploading announcement images to cloud…');
+      let added=0;
       for(const file of files){
-        const image=await compressImageFile(file,1400,900,.8);
+        const image=await prepareAndUploadImage(file,{maxW:1600,maxH:1000,quality:.84,maxBytes:3000000,gameId:game.id,purpose:`announcement-${game.announcements.length+1}`});
         game.announcements.push({id:makeId(),image,name:file.name.replace(/\.[^.]+$/,'')||'Announcement'});
+        added++; persist();
       }
-      if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
-      else setStatus(`${files.length} announcement${files.length===1?'':'s'} added`);
+      setStatus(`${added} announcement${added===1?'':'s'} uploaded to cloud`);
       renderPresentationModal();
     }
     if(target.id==='halftimeImageInput' && target.files[0]){
-      setStatus('Processing halftime image…');
-      game.halftimeImage=await compressImageFile(target.files[0],1600,1000,.82);
-      game.halftimeName=target.files[0].name.replace(/\.[^.]+$/,'');
-      if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
-      else setStatus('Halftime image added');
-      renderPresentationModal();
+      const file=target.files[0];
+      setStatus('Uploading halftime image to cloud…');
+      game.halftimeImage=await prepareAndUploadImage(file,{maxW:1800,maxH:1200,quality:.86,maxBytes:3200000,gameId:game.id,purpose:'halftime'});
+      game.halftimeName=file.name.replace(/\.[^.]+$/,'');
+      persist(); setStatus('Halftime image uploaded to cloud'); renderPresentationModal();
     }
     if(target.id.startsWith('betweenCategoryImageInput') && target.files[0]){
       const i=Number(target.dataset.betweenIndex ?? target.id.replace('betweenCategoryImageInput',''));
       if(Number.isInteger(i) && i>=0 && i<6){
         const file=target.files[0];
-        setStatus(`Processing slide after Category ${i+1}…`);
-        const image=await compressImageFile(file,1600,1000,.84);
+        setStatus(`Uploading slide after Category ${i+1} to cloud…`);
+        const image=await prepareAndUploadImage(file,{maxW:1800,maxH:1200,quality:.86,maxBytes:3200000,gameId:game.id,purpose:`between-category-${i+1}`});
         game.betweenCategorySlides[i]={image,name:file.name.replace(/\.[^.]+$/,'') || `Between Category ${i+1} & ${i+2}`};
-        if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
-        else setStatus(`Slide after Category ${i+1} added`);
-        renderPresentationModal();
+        persist(); setStatus(`Slide after Category ${i+1} uploaded to cloud`); renderPresentationModal();
       }
     }
     if(target.id==='pictureImageInput' && target.files[0]){
-      // Snapshot the file and question before any async image work. Returning from the
-      // OS file picker can fire focus/visibility events, so do not rely on the live input
-      // or active question after compression starts.
       const file=target.files[0];
       const categoryIndex=activeCategory;
       const questionIndex=activeQuestion;
-      setStatus('Processing picture…');
-      const image=await compressImageFile(file,2200,2200,.9);
+      setStatus('Uploading picture to cloud…');
+      const image=await prepareAndUploadImage(file,{maxW:2400,maxH:2400,quality:.9,maxBytes:3300000,gameId:game.id,purpose:`picture-c${categoryIndex+1}-q${questionIndex+1}`});
       const currentGame=selectedGame();
       const q=currentGame?.categories?.[categoryIndex]?.questions?.[questionIndex];
       if(!currentGame || !q) throw new Error('Could not find that picture question. Please try again.');
       q.image=image;
       currentGame.updatedAt=new Date().toISOString();
-      if(!persist()) alert('The browser storage is full. Remove some uploaded images and try again.');
-      else setStatus(`Picture added: ${file.name}`);
-      renderDashboard();
-      renderEditor();
+      persist(); setStatus(`Picture uploaded: ${file.name}`); renderDashboard(); renderEditor();
     }
-  }catch(error){ console.error(error); alert(error.message||'That image could not be added.'); }
+  }catch(error){
+    console.error(error);
+    alert(error.message||'That image could not be uploaded.');
+  }
   target.value='';
 }
 
