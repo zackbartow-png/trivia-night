@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'triviaNightGamesV1';
 const SELECTED_KEY = 'triviaNightSelectedGameV1';
+const PRESENTATION_DEFAULTS_KEY = 'triviaNightPresentationDefaultsV1';
 
 const DEFAULT_ICONS = ['🍿','⚾','🎵','🏛️','🍕','🧪','❓'];
 const DEFAULT_COLORS = ['#36a8f5','#08b7a7','#ff685f','#ffbf2f','#9465df','#1fc8c0','#f2a31c'];
@@ -8,18 +9,44 @@ const COLOR_LIBRARY = [
   '#ff4f8b','#ff685f','#e64b3c','#f28c28','#f2a31c','#ffbf2f','#ffd84d','#72bf44',
   '#33a852','#08b7a7','#00a58f','#1fc8c0','#39c6d8','#607d8b','#7c6657','#1d2d50'
 ];
-const ICON_LIBRARY = [
-  '🍿','🎬','🎞️','📺','🪑','🎭','🎟️','📽️','🎥','🏆',
-  '🎵','🎤','🎸','🎧','📻','🎹','🥁','🎷','🎺','🪕',
-  '⚾','🏈','🏀','⚽','🎾','🏒','⛳','🎳','🥊','🏎️','🏐','🏓','🏸','🥅','🏅',
-  '🍕','🍔','☕','🍸','🍦','🌮','🍩','🍎','🍷','🥨','🍺','🍰','🌶️','🥓','🍣',
-  '🧪','⚛️','🚀','⚡','🔭','🧬','💡','🩺','🌡️','🤖','🧲','🔬','🧠','🦠','🪐',
-  '🏛️','👑','🌍','📍','🏔️','🗺️','✈️','🚢','🏰','🗽','🌎','🌋','🏜️','🏝️','🧭',
-  '📚','✏️','📰','📝','🔤','🎨','🖼️','📷','📸','🧩','🎮','🎲','🃏','♟️','🎯',
-  '🐾','🐶','🐱','🦁','🐯','🐻','🦊','🐸','🦈','🐬','🦅','🦉','🐴','🐮','🦖',
-  '💻','📱','⌚','💾','💿','📡','🛰️','🔌','💰','💵','🚗','🚂','🚁','🛠️','⚙️',
-  '🌲','🌊','☀️','🌙','⭐','🌈','❄️','🔥','👻','🎄','🎃','❤️','💀','👽','🪄',
-  '❓','❗','💯','🔔','🕰️','📅','🎁','🧁','👀','🗣️','👥','🎉','🥳','🏁','🔑'
+const ICON_GROUPS = {
+  'General & Variety': ['❓','💡','🎯','⭐','🔑'],
+  'Movies & TV': ['🎬','🍿','📺','🎭','🎥'],
+  'Music': ['🎵','🎤','🎸','🎧','🥁'],
+  'Sports': ['🏈','⚾','🏀','⚽','⛳'],
+  'Food & Drink': ['🍕','🍔','🌮','☕','🍺'],
+  'Science & Space': ['🧪','🔬','🧬','🚀','🪐'],
+  'Technology': ['💻','📱','🤖','💾','📡'],
+  'History & Government': ['🏛️','👑','📜','⚔️','🗽'],
+  'Geography & Travel': ['🌍','🗺️','✈️','🧭','🏝️'],
+  'Books & Words': ['📚','✏️','🔤','📰','📝'],
+  'Animals': ['🐶','🐱','🦁','🦈','🦅'],
+  'Nature & Weather': ['🌲','🌊','☀️','❄️','🌋'],
+  'Games & Toys': ['🎮','🎲','🃏','♟️','🧩'],
+  'Art & Pictures': ['🎨','🖼️','📷','🖌️','🗿'],
+  'People & Professions': ['👨‍🍳','👩‍🚀','🕵️','👷','🧑‍⚕️'],
+  'Money & Business': ['💰','💵','📈','💳','🏦'],
+  'Cars & Transportation': ['🚗','🏎️','🚂','🚁','🚢'],
+  'Holidays & Seasons': ['🎄','🎃','❤️','🎆','☘️'],
+  'Pop Culture & Fun': ['👻','👽','🪄','🥳','🔥'],
+  'Numbers & Puzzles': ['🔢','➗','🧠','🧮','💯']
+};
+const ICON_LIBRARY = Object.values(ICON_GROUPS).flat();
+const FONT_OPTIONS = [
+  {id:'default',name:'Default'},
+  {id:'Arial',name:'Arial'},
+  {id:'Trebuchet MS',name:'Trebuchet MS'},
+  {id:'Verdana',name:'Verdana'},
+  {id:'Georgia',name:'Georgia'},
+  {id:'Courier New',name:'Courier New'},
+  {id:'Impact',name:'Impact'}
+];
+const QUESTION_SIZE_OPTIONS = [
+  {id:'auto',name:'Auto Fit'},
+  {id:'small',name:'Small'},
+  {id:'medium',name:'Medium'},
+  {id:'large',name:'Large'},
+  {id:'xlarge',name:'Extra Large'}
 ];
 const THEME_LIBRARY = [
   {id:'party', name:'Bright Party', desc:'The original bright projector-friendly look.'},
@@ -30,201 +57,48 @@ const THEME_LIBRARY = [
   {id:'chalk', name:'Chalkboard', desc:'Dark green chalkboard-inspired background.'}
 ];
 
-
-const QUESTION_BANK = {
-  movies: [
-    {q:'In The Wizard of Oz, what color is the brick road Dorothy follows?',a:'Yellow'},
-    {q:'What is the name of the fictional archaeologist played by Harrison Ford in Raiders of the Lost Ark?',a:'Indiana Jones'},
-    {q:'Which 1993 film features a theme park filled with cloned dinosaurs?',a:'Jurassic Park'},
-    {q:'In Back to the Future, what speed must the DeLorean reach to travel through time?',a:'88 miles per hour'},
-    {q:'Which animated film features the characters Woody and Buzz Lightyear?',a:'Toy Story'},
-    {q:'What is the name of the kingdom where Disney’s Frozen is primarily set?',a:'Arendelle'},
-    {q:'Which actor voices the character of Shrek in the Shrek films?',a:'Mike Myers'},
-    {q:'In Jaws, what type of shark terrorizes Amity Island?',a:'Great white shark'},
-    {q:'Which film franchise features the phrase “May the Force be with you”?',a:'Star Wars'},
-    {q:'What is the name of the hotel in The Shining?',a:'The Overlook Hotel'}
-  ],
-  sports: [
-    {q:'How many points is a touchdown worth before the extra point or conversion?',a:'6'},
-    {q:'How many players from one team are on the court at a time in basketball?',a:'5'},
-    {q:'What sport uses the terms birdie, eagle, and bogey?',a:'Golf'},
-    {q:'How many strikes make an out in baseball?',a:'3'},
-    {q:'In tennis, what word is used for a score of zero?',a:'Love'},
-    {q:'What color jersey is traditionally worn by the leader of the Tour de France?',a:'Yellow'},
-    {q:'How many holes are played in a standard round of golf?',a:'18'},
-    {q:'In American football, how many yards are needed for a first down under normal circumstances?',a:'10 yards'},
-    {q:'What sport is played at Wimbledon?',a:'Tennis'},
-    {q:'In bowling, what is it called when all ten pins are knocked down with the first ball?',a:'A strike'}
-  ],
-  history: [
-    {q:'Who was the first president of the United States?',a:'George Washington'},
-    {q:'In what year did the United States Declaration of Independence get adopted?',a:'1776'},
-    {q:'Which ancient civilization built Machu Picchu?',a:'The Inca'},
-    {q:'Who was the British prime minister for most of World War II?',a:'Winston Churchill'},
-    {q:'What ship carried the Pilgrims to North America in 1620?',a:'The Mayflower'},
-    {q:'Which ancient city was buried by the eruption of Mount Vesuvius in AD 79?',a:'Pompeii'},
-    {q:'The Renaissance began in which European country?',a:'Italy'},
-    {q:'Who wrote the Ninety-Five Theses in 1517?',a:'Martin Luther'},
-    {q:'Which wall fell in 1989, becoming a symbol of the end of the Cold War?',a:'The Berlin Wall'},
-    {q:'What was the name of the first artificial satellite launched into orbit?',a:'Sputnik 1'}
-  ],
-  science: [
-    {q:'What planet is known as the Red Planet?',a:'Mars'},
-    {q:'What is the chemical symbol for gold?',a:'Au'},
-    {q:'What gas do plants absorb from the atmosphere during photosynthesis?',a:'Carbon dioxide'},
-    {q:'How many bones are in the typical adult human body?',a:'206'},
-    {q:'What is the largest organ of the human body?',a:'The skin'},
-    {q:'What force keeps planets in orbit around the Sun?',a:'Gravity'},
-    {q:'What is the center of an atom called?',a:'The nucleus'},
-    {q:'At sea level, water freezes at what temperature on the Celsius scale?',a:'0°C'},
-    {q:'What is the closest star to Earth?',a:'The Sun'},
-    {q:'What blood type is commonly called the universal red-cell donor?',a:'O negative'}
-  ],
-  food: [
-    {q:'What country is traditionally credited as the birthplace of pizza?',a:'Italy'},
-    {q:'Guacamole is primarily made from what fruit?',a:'Avocado'},
-    {q:'What type of pastry is used to make a traditional éclair?',a:'Choux pastry'},
-    {q:'What legume is the main ingredient in traditional hummus?',a:'Chickpeas'},
-    {q:'What cheese is traditionally used in a Greek salad?',a:'Feta'},
-    {q:'What spirit is the base of a traditional margarita?',a:'Tequila'},
-    {q:'Sushi rice is traditionally seasoned with what type of vinegar?',a:'Rice vinegar'},
-    {q:'What nut is used to make traditional marzipan?',a:'Almond'},
-    {q:'What fruit is dried to make a prune?',a:'Plum'},
-    {q:'What Italian dessert literally means “pick me up”?',a:'Tiramisu'}
-  ],
-  geography: [
-    {q:'What is the largest ocean on Earth?',a:'The Pacific Ocean'},
-    {q:'What river flows through Paris?',a:'The Seine'},
-    {q:'What is the capital of Australia?',a:'Canberra'},
-    {q:'Mount Kilimanjaro is located in which country?',a:'Tanzania'},
-    {q:'What is the smallest country in the world by area?',a:'Vatican City'},
-    {q:'Which U.S. state is made up entirely of islands?',a:'Hawaii'},
-    {q:'What desert covers much of northern Africa?',a:'The Sahara Desert'},
-    {q:'What is the capital city of Japan?',a:'Tokyo'},
-    {q:'Which continent contains the South Pole?',a:'Antarctica'},
-    {q:'The Great Barrier Reef lies off the coast of which country?',a:'Australia'}
-  ],
-  music: [
-    {q:'Which band recorded the song “Bohemian Rhapsody”?',a:'Queen'},
-    {q:'Which singer is commonly known as the “King of Pop”?',a:'Michael Jackson'},
-    {q:'What instrument has 88 keys on a standard modern version?',a:'Piano'},
-    {q:'Which band featured John Lennon, Paul McCartney, George Harrison, and Ringo Starr?',a:'The Beatles'},
-    {q:'Which singer recorded “Jolene” and “9 to 5”?',a:'Dolly Parton'},
-    {q:'What family of instruments includes the violin, viola, cello, and double bass?',a:'Strings'},
-    {q:'Which composer wrote the famous Fifth Symphony that begins with four dramatic notes?',a:'Ludwig van Beethoven'},
-    {q:'Which singer is known for the song “Respect”?',a:'Aretha Franklin'},
-    {q:'What musical symbol raises a note by one semitone?',a:'A sharp'},
-    {q:'Which rock band released the album The Dark Side of the Moon?',a:'Pink Floyd'}
-  ],
-  television: [
-    {q:'What is the name of the coffee shop frequently visited by the friends in Friends?',a:'Central Perk'},
-    {q:'In The Simpsons, what is the name of the family’s hometown?',a:'Springfield'},
-    {q:'What paper company is the setting for The Office?',a:'Dunder Mifflin'},
-    {q:'In Stranger Things, what is the alternate dimension called?',a:'The Upside Down'},
-    {q:'Which animated TV family lives at 742 Evergreen Terrace?',a:'The Simpsons'},
-    {q:'What is the name of the pub featured in Cheers?',a:'Cheers'},
-    {q:'In Seinfeld, what is Kramer’s first name?',a:'Cosmo'},
-    {q:'What fictional town is the setting of Parks and Recreation?',a:'Pawnee, Indiana'},
-    {q:'Which TV series follows a chemistry teacher named Walter White?',a:'Breaking Bad'},
-    {q:'In Scooby-Doo, what is the name of the group’s van?',a:'The Mystery Machine'}
-  ],
-  books: [
-    {q:'Who wrote Pride and Prejudice?',a:'Jane Austen'},
-    {q:'Who wrote The Great Gatsby?',a:'F. Scott Fitzgerald'},
-    {q:'What is the name of the young wizard at the center of J.K. Rowling’s famous series?',a:'Harry Potter'},
-    {q:'Who wrote To Kill a Mockingbird?',a:'Harper Lee'},
-    {q:'In Charlotte’s Web, what kind of animal is Wilbur?',a:'A pig'},
-    {q:'Who wrote The Hobbit?',a:'J.R.R. Tolkien'},
-    {q:'What is the surname of the sisters in Little Women?',a:'March'},
-    {q:'Who wrote The Catcher in the Rye?',a:'J.D. Salinger'},
-    {q:'What fictional detective lives at 221B Baker Street?',a:'Sherlock Holmes'},
-    {q:'Which George Orwell novel features a farm run by animals?',a:'Animal Farm'}
-  ],
-  animals: [
-    {q:'What is the largest living land animal?',a:'African elephant'},
-    {q:'What is a group of lions called?',a:'A pride'},
-    {q:'What is the only mammal capable of true sustained flight?',a:'Bat'},
-    {q:'What animal is known for changing color and having independently moving eyes?',a:'Chameleon'},
-    {q:'What is the fastest land animal?',a:'Cheetah'},
-    {q:'What type of animal is an axolotl?',a:'Salamander'},
-    {q:'Which bird is famous for being unable to fly and living in Antarctica?',a:'Penguin'},
-    {q:'What do giant pandas primarily eat?',a:'Bamboo'},
-    {q:'What is a baby kangaroo called?',a:'A joey'},
-    {q:'Which marine mammal is the largest animal known to have lived?',a:'Blue whale'}
-  ],
-  technology: [
-    {q:'What does CPU stand for?',a:'Central Processing Unit'},
-    {q:'What does URL stand for?',a:'Uniform Resource Locator'},
-    {q:'What does GPS stand for?',a:'Global Positioning System'},
-    {q:'What company created the Windows operating system?',a:'Microsoft'},
-    {q:'What does PDF stand for?',a:'Portable Document Format'},
-    {q:'In computing, what does RAM stand for?',a:'Random Access Memory'},
-    {q:'What symbol is commonly used in email addresses between the username and domain?',a:'@'},
-    {q:'What does USB stand for?',a:'Universal Serial Bus'},
-    {q:'What programming language shares its name with an Indonesian island?',a:'Java'},
-    {q:'What does Wi-Fi allow devices to do without a physical network cable?',a:'Connect to a wireless network'}
-  ],
-  popculture: [
-    {q:'What doll brand introduced a boyfriend named Ken in 1961?',a:'Barbie'},
-    {q:'What video game character is a plumber who often rescues Princess Peach?',a:'Mario'},
-    {q:'Which superhero is also known as Bruce Wayne?',a:'Batman'},
-    {q:'What fictional school does Harry Potter attend?',a:'Hogwarts'},
-    {q:'What is the name of Mickey Mouse’s dog?',a:'Pluto'},
-    {q:'Which board game features properties such as Boardwalk and Park Place?',a:'Monopoly'},
-    {q:'What Pokémon is known for its yellow body and lightning-bolt-shaped tail?',a:'Pikachu'},
-    {q:'Which superhero carries a shield decorated with a star?',a:'Captain America'},
-    {q:'What color are the Smurfs?',a:'Blue'},
-    {q:'What toy puzzle consists of a cube with rotating colored faces?',a:'Rubik’s Cube'}
-  ],
-  general: [
-    {q:'How many sides does a hexagon have?',a:'6'},
-    {q:'What is the largest planet in our solar system?',a:'Jupiter'},
-    {q:'How many letters are in the English alphabet?',a:'26'},
-    {q:'What is the capital of Canada?',a:'Ottawa'},
-    {q:'What color do you get when you mix blue and yellow paint?',a:'Green'},
-    {q:'How many days are in a leap year?',a:'366'},
-    {q:'What is the Roman numeral for 50?',a:'L'},
-    {q:'What is the square root of 144?',a:'12'},
-    {q:'Which chess piece moves in an L shape?',a:'Knight'},
-    {q:'What is the name for a word that reads the same forward and backward?',a:'Palindrome'},
-    {q:'How many continents are commonly recognized?',a:'7'},
-    {q:'What is the main language spoken in Brazil?',a:'Portuguese'}
-  ]
-};
-
-const MUSIC_IDEA_BANK = [
-  'Take on Me — a-ha','Dancing Queen — ABBA','Sweet Caroline — Neil Diamond','Livin’ on a Prayer — Bon Jovi','I Wanna Dance with Somebody — Whitney Houston',
-  'Don’t Stop Believin’ — Journey','September — Earth, Wind & Fire','Man! I Feel Like a Woman! — Shania Twain','Uptown Funk — Mark Ronson ft. Bruno Mars','Since U Been Gone — Kelly Clarkson',
-  'Mr. Brightside — The Killers','Everybody (Backstreet’s Back) — Backstreet Boys','No Scrubs — TLC','Friends in Low Places — Garth Brooks','Hey Ya! — Outkast',
-  'Complicated — Avril Lavigne','I Want It That Way — Backstreet Boys','Before He Cheats — Carrie Underwood','Crazy in Love — Beyoncé ft. Jay-Z','You Shook Me All Night Long — AC/DC'
-];
-
-function helperPoolForCategory(name='') {
-  const n=String(name).toLowerCase();
-  const matches = [
-    ['movies',['movie','movies','film','films','cinema','hollywood','disney']],
-    ['sports',['sport','sports','football','baseball','basketball','golf','soccer','tennis','athletic']],
-    ['history',['history','historic','president','war','ancient','past']],
-    ['science',['science','space','chemistry','physics','biology','medical','medicine','nature']],
-    ['food',['food','drink','cooking','kitchen','restaurant','beer','wine','cocktail','dessert']],
-    ['geography',['geography','world','country','countries','capital','travel','map','places']],
-    ['music',['music','song','songs','band','bands','artist','artists','rock','country music']],
-    ['television',['tv','television','sitcom','shows','show']],
-    ['books',['book','books','literature','author','authors','novel','novels']],
-    ['animals',['animal','animals','wildlife','pets','dog','dogs','cat','cats']],
-    ['technology',['technology','tech','computer','computers','internet','digital','software']],
-    ['popculture',['pop culture','popculture','superhero','superheroes','games','gaming','toys']]
-  ];
-  const hit=matches.find(([,words])=>words.some(w=>n.includes(w)));
-  return hit?.[0] || 'general';
-}
-
 function makeId() {
   return globalThis.crypto?.randomUUID?.() || `game-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 function sanitizeColor(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback;
 }
+function blankQuestion(){
+  return {
+    question:'', answer:'', image:'', youtubeUrl:'', youtubeIn:0, youtubeOut:0,
+    format:'standard', choices:{a:'',b:'',c:'',d:''},
+    formatting:{fontFamily:'default',fontSize:'auto',bold:true,italic:false,underline:false}
+  };
+}
+function defaultPresenterLayout(){ return {preset:'auto',contentWidth:98,topSafe:0}; }
+function loadPresentationDefaults(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(PRESENTATION_DEFAULTS_KEY)||'null')||{};
+    return {
+      announcementSeconds:Math.min(60,Math.max(2,Number(raw.announcementSeconds)||8)),
+      announcements:Array.isArray(raw.announcements)?raw.announcements.filter(x=>x?.image).map(x=>({id:x.id||makeId(),image:x.image,name:x.name||'Announcement'})).slice(0,12):[],
+      halftimeImage:raw.halftimeImage||'', halftimeName:raw.halftimeName||'',
+      betweenCategorySlides:Array.from({length:6},(_,i)=>({image:raw.betweenCategorySlides?.[i]?.image||'',name:raw.betweenCategorySlides?.[i]?.name||`Between Category ${i+1} & ${i+2}`}))
+    };
+  }catch{return {announcementSeconds:8,announcements:[],halftimeImage:'',halftimeName:'',betweenCategorySlides:blankBetweenCategorySlides()};}
+}
+function savePresentationDefaultsFromGame(game){
+  if(!game) return;
+  const payload={
+    announcementSeconds:game.announcementSeconds||8,
+    announcements:(game.announcements||[]).filter(x=>x?.image && !isEmbeddedImage(x.image)).map(x=>({id:x.id||makeId(),image:x.image,name:x.name||'Announcement'})),
+    halftimeImage:game.halftimeImage && !isEmbeddedImage(game.halftimeImage) ? game.halftimeImage : '', halftimeName:game.halftimeName||'',
+    betweenCategorySlides:Array.from({length:6},(_,i)=>{ const s=game.betweenCategorySlides?.[i]; return {image:s?.image && !isEmbeddedImage(s.image)?s.image:'',name:s?.name||`Between Category ${i+1} & ${i+2}`}; })
+  };
+  try{ localStorage.setItem(PRESENTATION_DEFAULTS_KEY,JSON.stringify(payload)); }catch{}
+}
+function iconGroupFor(icon){ return Object.entries(ICON_GROUPS).find(([,icons])=>icons.includes(icon))?.[0] || Object.keys(ICON_GROUPS)[0]; }
+function normalizeFormatting(value={}){
+  const fontFamily=FONT_OPTIONS.some(x=>x.id===value?.fontFamily)?value.fontFamily:'default';
+  const fontSize=QUESTION_SIZE_OPTIONS.some(x=>x.id===value?.fontSize)?value.fontSize:'auto';
+  return {fontFamily,fontSize,bold:value?.bold!==false,italic:Boolean(value?.italic),underline:Boolean(value?.underline)};
+}
+
 const blankCategory = (i) => ({
   name: `Category ${i + 1}`,
   icon: DEFAULT_ICONS[i],
@@ -233,29 +107,32 @@ const blankCategory = (i) => ({
   description: '',
   timerEnabled: false,
   timerSeconds: 30,
-  questions: Array.from({ length: 10 }, () => ({ question: '', answer: '', image: '', youtubeUrl: '', youtubeIn: 0, youtubeOut: 0 }))
+  questions: Array.from({ length: 10 }, () => blankQuestion())
 });
-const blankBonus = () => ({ enabled: true, name: 'Bonus Round', question: '', answer: '' });
-const blankTieBreaker = () => ({ enabled: false, name: 'Tie Breaker', question: '', answer: '' });
+const blankBonus = () => ({ enabled: true, name: 'Bonus Round', question: '', answer: '', formatting:normalizeFormatting({}) });
+const blankTieBreaker = () => ({ enabled: false, name: 'Tie Breaker', question: '', answer: '', formatting:normalizeFormatting({}) });
 const blankBetweenCategorySlides = () => Array.from({length:6}, (_,i) => ({ image:'', name:`Between Category ${i+1} & ${i+2}` }));
-const createBlankGame = () => ({
-  id: makeId(),
-  title: `Trivia Night — ${new Date().toLocaleDateString()}`,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  theme: 'party',
-  announcementSeconds: 8,
-  announcements: [],
-  halftimeImage: '',
-  halftimeName: '',
-  betweenCategorySlides: blankBetweenCategorySlides(),
-  categories: Array.from({ length: 7 }, (_, i) => blankCategory(i)),
-  bonus: blankBonus(),
-  tieBreaker: blankTieBreaker()
-});
+const createBlankGame = () => {
+  const defaults=loadPresentationDefaults();
+  return {
+    id: makeId(),
+    title: `Trivia Night — ${new Date().toLocaleDateString()}`,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    theme:'party',
+    announcementSeconds:defaults.announcementSeconds,
+    announcements:structuredClone(defaults.announcements),
+    halftimeImage:defaults.halftimeImage,
+    halftimeName:defaults.halftimeName,
+    betweenCategorySlides:structuredClone(defaults.betweenCategorySlides),
+    presenterLayout:defaultPresenterLayout(),
+    categories:Array.from({length:7},(_,i)=>blankCategory(i)),
+    bonus:blankBonus(), tieBreaker:blankTieBreaker()
+  };
+};
 
 let games = loadGames();
 let selectedId = localStorage.getItem(SELECTED_KEY) || games[0]?.id || '';
+if (!localStorage.getItem(PRESENTATION_DEFAULTS_KEY) && games.length) { savePresentationDefaultsFromGame(games.find(g=>g.id===selectedId) || games[0]); }
 let activeCategory = 0;
 let activeQuestion = 0;
 let activeBonus = false;
@@ -270,11 +147,6 @@ const MEDIA_INPUT_IDS = new Set(['announcementImagesInput','halftimeImageInput',
 let mediaFilePickerOpen = false;
 let mediaInputBusy = false;
 let pendingFocusSyncTimer = null;
-let helperSuggestion = null;
-let aiHelperLoading = false;
-let aiHelperError = '';
-let aiDifficulty = 'medium';
-let aiFocus = '';
 
 // Inline YouTube trim editor state (Music Rounds only)
 let musicTrimPlayer = null;
@@ -299,35 +171,38 @@ function normalizeGame(game) {
     const type = ['standard','music','picture'].includes(source.type) ? source.type : 'standard';
     return {
       name: source.name || `Category ${ci+1}`,
-      icon: ICON_LIBRARY.includes(source.icon) ? source.icon : DEFAULT_ICONS[ci],
+      icon: source.icon || DEFAULT_ICONS[ci],
       color: sanitizeColor(source.color, DEFAULT_COLORS[ci]),
       type,
       description: source.description || '',
       timerEnabled: Boolean(source.timerEnabled),
       timerSeconds: Math.min(300, Math.max(5, Number(source.timerSeconds) || 30)),
-      questions: Array.from({length:10}, (_,qi) => ({
-        question: source.questions?.[qi]?.question || '',
-        answer: source.questions?.[qi]?.answer || '',
-        image: source.questions?.[qi]?.image || '',
-        youtubeUrl: source.questions?.[qi]?.youtubeUrl || source.questions?.[qi]?.youtube || '',
-        youtubeIn: Math.max(0, Number(source.questions?.[qi]?.youtubeIn ?? source.questions?.[qi]?.youtubeStart ?? 0) || 0),
-        youtubeOut: Math.max(0, Number(source.questions?.[qi]?.youtubeOut ?? source.questions?.[qi]?.youtubeEnd ?? 0) || 0)
-      }))
+      questions: Array.from({length:10}, (_,qi) => {
+        const item=source.questions?.[qi]||{};
+        const choiceSource=item.choices||{};
+        return {
+          question:item.question||'', answer:item.answer||'', image:item.image||'',
+          youtubeUrl:item.youtubeUrl||item.youtube||'',
+          youtubeIn:Math.max(0,Number(item.youtubeIn ?? item.youtubeStart ?? 0)||0),
+          youtubeOut:Math.max(0,Number(item.youtubeOut ?? item.youtubeEnd ?? 0)||0),
+          format:item.format==='multiple-choice'?'multiple-choice':'standard',
+          choices:{a:choiceSource.a||'',b:choiceSource.b||'',c:choiceSource.c||'',d:choiceSource.d||''},
+          formatting:normalizeFormatting(item.formatting||{})
+        };
+      })
     };
   });
   const sourceBonus = game.bonus || {};
   game.bonus = {
     enabled: typeof sourceBonus.enabled === 'boolean' ? sourceBonus.enabled : false,
-    name: sourceBonus.name || 'Bonus Round',
-    question: sourceBonus.question || '',
-    answer: sourceBonus.answer || ''
+    name: sourceBonus.name || 'Bonus Round', question: sourceBonus.question || '', answer: sourceBonus.answer || '',
+    formatting:normalizeFormatting(sourceBonus.formatting||{})
   };
   const sourceTieBreaker = game.tieBreaker || game.tiebreaker || {};
   game.tieBreaker = {
     enabled: typeof sourceTieBreaker.enabled === 'boolean' ? sourceTieBreaker.enabled : false,
-    name: sourceTieBreaker.name || 'Tie Breaker',
-    question: sourceTieBreaker.question || '',
-    answer: sourceTieBreaker.answer || ''
+    name: sourceTieBreaker.name || 'Tie Breaker', question: sourceTieBreaker.question || '', answer: sourceTieBreaker.answer || '',
+    formatting:normalizeFormatting(sourceTieBreaker.formatting||{})
   };
   const sourceBetween = Array.isArray(game.betweenCategorySlides) ? game.betweenCategorySlides : [];
   game.betweenCategorySlides = Array.from({length:6}, (_,i) => ({
@@ -339,6 +214,12 @@ function normalizeGame(game) {
   game.announcements = Array.isArray(game.announcements) ? game.announcements.filter(x=>x && x.image).map(x=>({id:x.id||makeId(), image:x.image, name:x.name||'Announcement'})).slice(0,12) : [];
   game.halftimeImage = game.halftimeImage || '';
   game.halftimeName = game.halftimeName || '';
+  const layout=game.presenterLayout||{};
+  game.presenterLayout={
+    preset:['auto','16:9','16:10','4:3','custom'].includes(layout.preset)?layout.preset:'auto',
+    contentWidth:Math.min(100,Math.max(78,Number(layout.contentWidth)||98)),
+    topSafe:Math.min(12,Math.max(0,Number(layout.topSafe)||0))
+  };
   return game;
 }
 function persist() {
@@ -355,7 +236,7 @@ function persist() {
 }
 function selectedGame() { return games.find(g => g.id === selectedId); }
 function esc(str='') { return String(str).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
-function categoryFilled(cat) { return cat.questions.filter(q => cat.type === 'music' ? q.answer.trim() : cat.type === 'picture' ? (q.image && q.answer.trim()) : (q.question.trim() && q.answer.trim())).length; }
+function categoryFilled(cat) { return cat.questions.filter(q => cat.type === 'music' ? q.answer.trim() : cat.type === 'picture' ? (q.image && q.answer.trim()) : q.format==='multiple-choice' ? (q.question.trim() && q.answer.trim() && ['a','b','c','d'].every(k=>String(q.choices?.[k]||'').trim())) : (q.question.trim() && q.answer.trim())).length; }
 function filledCount(game) { return game?.categories.reduce((sum,c) => sum + categoryFilled(c), 0) || 0; }
 function formattedDate(value) { try { return new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); } catch { return ''; } }
 function setStatus(text='Saved') {
@@ -468,110 +349,7 @@ function gameCard(g) {
 }
 
 
-function resetHelper() {
-  helperSuggestion = null;
-  aiHelperError = '';
-  aiHelperLoading = false;
-  aiFocus = '';
-}
-function usedQuestionTexts(game) {
-  return new Set((game?.categories || []).flatMap(c => c.questions || []).map(q => (q.question || '').trim().toLowerCase()).filter(Boolean));
-}
-function suggestHelper() {
-  const game=selectedGame(); if (!game || activeBonus || activeTieBreaker) return;
-  const cat=game.categories[activeCategory];
-  if (cat.type === 'music') {
-    const used=new Set(cat.questions.map(q=>(q.answer||'').trim().toLowerCase()).filter(Boolean));
-    const available=MUSIC_IDEA_BANK.filter(x=>!used.has(x.toLowerCase()) && x.toLowerCase() !== (helperSuggestion?.a||'').toLowerCase());
-    const pick=(available.length?available:MUSIC_IDEA_BANK)[Math.floor(Math.random()*(available.length?available.length:MUSIC_IDEA_BANK.length))];
-    helperSuggestion={kind:'music', q:'', a:pick, pool:'Music Round'};
-  } else {
-    const poolName=helperPoolForCategory(cat.name);
-    const pool=QUESTION_BANK[poolName] || QUESTION_BANK.general;
-    const used=usedQuestionTexts(game);
-    const available=pool.filter(item=>!used.has(item.q.toLowerCase()) && item.q !== helperSuggestion?.q);
-    const choices=available.length?available:pool;
-    const pick=choices[Math.floor(Math.random()*choices.length)];
-    helperSuggestion={kind:'question', q:pick.q, a:pick.a, pool:poolName === 'general' ? 'General Knowledge' : poolName.charAt(0).toUpperCase()+poolName.slice(1)};
-  }
-  renderEditor();
-}
-function useHelperSuggestion() {
-  const game=selectedGame(); if (!game || !helperSuggestion || activeBonus || activeTieBreaker) return;
-  const cat=game.categories[activeCategory]; const q=cat.questions[activeQuestion];
-  if (cat.type === 'music') q.answer=helperSuggestion.a;
-  else { q.question=helperSuggestion.q; q.answer=helperSuggestion.a; }
-  touch(game, cat.type === 'music' ? 'Song idea added' : 'Question added');
-  helperSuggestion=null; renderDashboard(); renderEditor();
-}
-
-
-function renderAIHelper(cat, isMusic) {
-  const emptyCount = cat.questions.filter(item => isMusic ? !item.answer.trim() : !(item.question.trim() && item.answer.trim())).length;
-  const difficultyOptions = ['easy','medium','hard','mixed'].map(v => `<option value="${v}" ${aiDifficulty===v?'selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('');
-  const suggestionSource = helperSuggestion?.source === 'ai'
-    ? `Gemini · ${esc(helperSuggestion.pool || aiDifficulty)}`
-    : (isMusic ? 'Built-in song idea' : `Built-in · ${esc(helperSuggestion?.pool || '')}`);
-  return `<div class="trivia-helper ai-trivia-helper" style="--helper-color:${cat.color}">
-    <div class="helper-head ai-helper-title"><div><span class="helper-kicker">✨ GEMINI ${isMusic?'MUSIC':'TRIVIA'} HELPER</span><strong>${isMusic?'Build your music round faster':'Create questions for this category'}</strong></div><span class="ai-category-pill">${cat.icon} ${esc(cat.name)}</span></div>
-    <div class="ai-helper-controls">
-      <label class="ai-control-field"><span>Difficulty</span><select id="aiDifficulty" class="text-input">${difficultyOptions}</select></label>
-      <label class="ai-control-field ai-focus-field"><span>Extra direction <small>(optional)</small></span><input id="aiFocus" class="text-input" value="${esc(aiFocus)}" placeholder="${isMusic?'Example: 1990s country, recognizable songs':'Example: 1990s only, no date questions'}"></label>
-    </div>
-    <div class="ai-helper-buttons">
-      <button class="ui-btn ui-btn-small ui-btn-primary" data-action="ai-generate" ${aiHelperLoading?'disabled':''}>${aiHelperLoading?'⏳ Gemini is thinking…':`✨ ${isMusic?'Suggest Song with Gemini':'Generate with Gemini'}`}</button>
-      <button class="ui-btn ui-btn-small ui-btn-teal" data-action="ai-fill" ${aiHelperLoading || emptyCount===0?'disabled':''}>${isMusic?'♫':'⚡'} Fill ${emptyCount} Empty</button>
-      <button class="ui-btn ui-btn-small" data-action="helper-suggest" ${aiHelperLoading?'disabled':''}>Offline Suggestion</button>
-    </div>
-    ${aiHelperError ? `<div class="ai-helper-error">${esc(aiHelperError)}</div>` : ''}
-    ${helperSuggestion ? `<div class="helper-result"><span class="helper-match">${suggestionSource}</span>${isMusic?'':`<div class="helper-question">${esc(helperSuggestion.q)}</div>`}<div class="helper-answer"><b>${isMusic?'Song idea':'Answer'}:</b> ${esc(helperSuggestion.a)}</div><div class="helper-actions"><button class="ui-btn ui-btn-small ${helperSuggestion.source==='ai'?'ui-btn-primary':''}" data-action="${helperSuggestion.source==='ai'?'ai-generate':'helper-suggest'}">↻ Try Another</button><button class="ui-btn ui-btn-small ui-btn-teal" data-action="helper-use">✓ Use This ${isMusic?'Song':'Question'}</button></div></div>` : `<p class="helper-empty">${isMusic?'Gemini can suggest songs that match this round theme. After choosing a song, paste its YouTube link into the song editor.':'Gemini automatically uses the category name. Add a specific theme above if you want a narrower question.'}</p>`}
-    <div class="ai-helper-footnote"><span>Gemini-generated content should be reviewed before game night.</span><span>Offline Suggestion works without an API connection.</span></div>
-  </div>`;
-}
-
-async function generateAIHelper(fillEmpty=false) {
-  const game=selectedGame(); if (!game || activeBonus || activeTieBreaker || aiHelperLoading) return;
-  const cat=game.categories[activeCategory];
-  const isMusic=cat.type==='music';
-  const emptyIndexes=cat.questions.map((item,i)=>({item,i})).filter(({item})=>isMusic ? !item.answer.trim() : !(item.question.trim() && item.answer.trim())).map(x=>x.i);
-  if (fillEmpty && !emptyIndexes.length) { setStatus('No empty slots'); return; }
-  const count=fillEmpty ? Math.min(10,emptyIndexes.length) : 1;
-  aiHelperLoading=true; aiHelperError=''; helperSuggestion=null; renderEditor();
-  try {
-    const response=await fetch('/api/ai-helper',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        category:cat.name,
-        roundType:isMusic?'music':'standard',
-        difficulty:aiDifficulty,
-        focus:aiFocus.trim(),
-        count,
-        existing:cat.questions.map(item=>isMusic ? item.answer : `${item.question} | ${item.answer}`).filter(Boolean)
-      })
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(data.error || 'Gemini Helper is unavailable.');
-    const items=Array.isArray(data.items)?data.items:[];
-    if(!items.length) throw new Error('Gemini did not return a usable suggestion.');
-    if(fillEmpty){
-      emptyIndexes.slice(0,items.length).forEach((idx,n)=>{
-        if(isMusic) cat.questions[idx].answer=items[n].answer || '';
-        else cat.questions[idx]={question:items[n].question || '',answer:items[n].answer || ''};
-      });
-      touch(game,isMusic?`${items.length} song ideas added`:`${items.length} Gemini questions added`);
-      renderDashboard();
-    } else {
-      const item=items[0];
-      helperSuggestion={kind:isMusic?'music':'question',q:isMusic?'':(item.question||''),a:item.answer||'',pool:`${aiDifficulty.charAt(0).toUpperCase()+aiDifficulty.slice(1)} · Gemini`,source:'ai'};
-    }
-  } catch(err) {
-    const localHint = location.protocol === 'file:' ? ' Host the site to enable AI; Offline Suggestion still works now.' : '';
-    aiHelperError=(err?.message || 'Gemini Helper could not connect.') + localHint;
-  } finally {
-    aiHelperLoading=false; renderEditor();
-  }
-}
+function resetHelper(){}
 
 function parseTimecode(value='') {
   const raw=String(value??'').trim(); if(!raw) return 0;
@@ -878,7 +656,7 @@ async function migrateSelectedGameImagesToCloud(){
       const slide=game.betweenCategorySlides[i];
       await migrate(()=>slide.image,v=>slide.image=v,`between-category-${i+1}`,`${slide.name||`between-category-${i+1}`}.jpg`);
     }
-    persist();
+    persist(); savePresentationDefaultsFromGame(game);
     setStatus(`${completed} existing image${completed===1?'':'s'} moved to cloud storage`);
     renderDashboard(); renderEditor(); renderPresentationModal();
   }catch(error){
@@ -887,6 +665,13 @@ async function migrateSelectedGameImagesToCloud(){
     alert(`${error.message||'Could not finish moving images to cloud.'}\n\n${completed} of ${total} image${total===1?'':'s'} were moved successfully. You can run the migration again to continue.`);
     renderPresentationModal();
   }
+}
+
+function renderSlideFormattingPanel(prefix, formatting){
+  const f=normalizeFormatting(formatting||{});
+  const actionPrefix=prefix==='bonus'?'bonus-':prefix==='tieBreaker'?'tie-':'';
+  const idPrefix=prefix==='bonus'?'bonus':prefix==='tieBreaker'?'tieBreaker':'question';
+  return `<section class="slide-format-panel"><div class="slide-format-head"><strong>Slide Text Formatting</strong><span>Font, emphasis, and starting size</span></div><div class="slide-format-controls"><label><span>Font</span><select id="${idPrefix}FontInput" class="text-input">${FONT_OPTIONS.map(x=>`<option value="${esc(x.id)}" ${f.fontFamily===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label><label><span>Size</span><select id="${idPrefix}SizeInput" class="text-input">${QUESTION_SIZE_OPTIONS.map(x=>`<option value="${x.id}" ${f.fontSize===x.id?'selected':''}>${x.name}</option>`).join('')}</select></label><div class="format-toggle-row"><button type="button" class="format-toggle ${f.bold?'active':''}" data-action="${actionPrefix}format-bold"><b>B</b></button><button type="button" class="format-toggle ${f.italic?'active':''}" data-action="${actionPrefix}format-italic"><i>I</i></button><button type="button" class="format-toggle ${f.underline?'active':''}" data-action="${actionPrefix}format-underline"><u>U</u></button></div></div></section>`;
 }
 
 function renderEditor() {
@@ -930,6 +715,7 @@ function renderEditor() {
       <div class="form-field"><label>Tie Breaker Category Name</label><input id="tieBreakerNameInput" class="text-input" maxlength="42" value="${esc(tieBreaker.name || 'Tie Breaker')}" placeholder="Example: Closest Wins"></div>
       <div class="form-field"><label>Tie Breaker Question</label><textarea id="tieBreakerQuestionInput" class="text-area bonus-question-area" placeholder="Type the tie-breaker question...">${esc(tieBreaker.question)}</textarea></div>
       <div class="form-field"><label>Tie Breaker Answer</label><input id="tieBreakerAnswerInput" class="text-input" value="${esc(tieBreaker.answer)}" placeholder="Enter the correct answer"></div>
+      ${renderSlideFormattingPanel('tieBreaker',tieBreaker.formatting)}
       <div class="edit-footer"><button class="ui-btn ui-btn-coral" data-action="clear-tie-breaker">Clear Tie Breaker</button><button class="ui-btn ui-btn-teal" data-action="save">✓ Save Tie Breaker</button></div>
     </section>
 
@@ -967,6 +753,7 @@ function renderEditor() {
       <div class="form-field"><label>Bonus Category Name</label><input id="bonusNameInput" class="text-input" maxlength="42" value="${esc(bonus.name || 'Bonus Round')}" placeholder="Example: Final Wager"></div>
       <div class="form-field"><label>Bonus Question</label><textarea id="bonusQuestionInput" class="text-area bonus-question-area" placeholder="Type the final bonus question...">${esc(bonus.question)}</textarea></div>
       <div class="form-field"><label>Bonus Answer</label><input id="bonusAnswerInput" class="text-input" value="${esc(bonus.answer)}" placeholder="Enter the bonus answer"></div>
+      ${renderSlideFormattingPanel('bonus',bonus.formatting)}
       <div class="edit-footer"><button class="ui-btn ui-btn-coral" data-action="clear-bonus">Clear Bonus</button><button class="ui-btn ui-btn-teal" data-action="save">✓ Save Bonus</button></div>
     </section>
 
@@ -999,7 +786,6 @@ function renderEditor() {
     <section class="editor-card ${isMusic?'music-external-editor':isPicture?'picture-editor':''}">
       <div class="panel-title">EDIT ${isMusic?'SONG':isPicture?'PICTURE':'QUESTION'} ${activeQuestion+1}</div>
       <h2>${cat.icon} ${esc(cat.name)} · ${isMusic?'Song':isPicture?'Picture':'Question'} ${activeQuestion+1}</h2>
-      ${(!isPicture ? renderAIHelper(cat,isMusic) : '')}
       ${isMusic ? `
         <div class="external-music-callout"><div class="external-music-icon">✂</div><div><strong>YouTube Clip Editor</strong><span>Paste the YouTube link, trim the exact portion you want to use, and save the IN/OUT marks directly to this song.</span></div></div>
         <div class="form-field"><label>YouTube Link for Song ${activeQuestion+1}</label><div class="music-link-row"><input id="youtubeUrlInput" class="text-input" value="${esc(q.youtubeUrl || '')}" placeholder="https://www.youtube.com/watch?v=..."><button class="ui-btn" data-action="music-trim-load">Load / Reload Video</button></div></div>
@@ -1023,6 +809,7 @@ function renderEditor() {
             <button class="ui-btn ui-btn-primary" data-action="music-trim-set-out">② Set OUT Here</button>
             <button class="ui-btn" data-action="music-trim-go-in">Go to IN</button>
             <button class="ui-btn" data-action="music-trim-go-out">Go to OUT</button>
+            <button class="ui-btn" data-action="music-trim-clear-in">Clear IN</button>
             <button class="ui-btn" data-action="music-trim-clear-out">Clear OUT</button>
             <button class="ui-btn ui-btn-teal" data-action="music-trim-save">✓ Save Clip Marks</button>
           </div>
@@ -1039,8 +826,22 @@ function renderEditor() {
         <div class="form-field"><label>Optional Picture Prompt</label><textarea id="questionInput" class="text-area picture-prompt" placeholder="Optional: Name this landmark, Who is this?, Identify this logo...">${esc(q.question)}</textarea></div>
         <div class="form-field"><label>Answer</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="Enter the correct answer"></div>
       ` : `
+        <div class="question-format-row">
+          <label class="form-field"><span>Question Layout</span><select id="questionFormatInput" class="text-input"><option value="standard" ${q.format!=='multiple-choice'?'selected':''}>Standard Question</option><option value="multiple-choice" ${q.format==='multiple-choice'?'selected':''}>Multiple Choice (A–D)</option></select></label>
+        </div>
         <div class="form-field"><label>Question</label><textarea id="questionInput" class="text-area" placeholder="Type the question the room will see...">${esc(q.question)}</textarea></div>
-        <div class="form-field"><label>Answer</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="Enter the correct answer"></div>
+        ${q.format==='multiple-choice'?`<div class="mc-editor-grid">
+          ${['a','b','c','d'].map(letter=>`<label class="mc-editor-choice"><span>${letter.toUpperCase()}</span><textarea id="choice${letter.toUpperCase()}Input" class="text-area" placeholder="Choice ${letter.toUpperCase()}">${esc(q.choices?.[letter]||'')}</textarea></label>`).join('')}
+        </div>`:''}
+        <div class="form-field"><label>Answer</label><input id="answerInput" class="text-input" value="${esc(q.answer)}" placeholder="${q.format==='multiple-choice'?'Example: B — Correct answer':'Enter the correct answer'}"></div>
+        <section class="slide-format-panel">
+          <div class="slide-format-head"><strong>Slide Text Formatting</strong><span>Applies to this question slide</span></div>
+          <div class="slide-format-controls">
+            <label><span>Font</span><select id="questionFontInput" class="text-input">${FONT_OPTIONS.map(f=>`<option value="${esc(f.id)}" ${q.formatting?.fontFamily===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}</select></label>
+            <label><span>Size</span><select id="questionSizeInput" class="text-input">${QUESTION_SIZE_OPTIONS.map(s=>`<option value="${s.id}" ${(q.formatting?.fontSize||'auto')===s.id?'selected':''}>${s.name}</option>`).join('')}</select></label>
+            <div class="format-toggle-row"><button type="button" class="format-toggle ${q.formatting?.bold!==false?'active':''}" data-action="format-bold"><b>B</b></button><button type="button" class="format-toggle ${q.formatting?.italic?'active':''}" data-action="format-italic"><i>I</i></button><button type="button" class="format-toggle ${q.formatting?.underline?'active':''}" data-action="format-underline"><u>U</u></button></div>
+          </div>
+        </section>
       `}
       ${cat.timerEnabled ? `<div class="timer-editor-note">⏱ Auto-advance is ON for this round: <strong>${cat.timerSeconds} seconds</strong> per question.</div>` : ''}
       <div class="edit-footer"><button class="ui-btn ui-btn-coral" data-action="clear-question">Clear ${isMusic?'Song':isPicture?'Picture':'Question'}</button><button class="ui-btn ui-btn-teal" data-action="save">✓ Save ${isMusic?'Song':isPicture?'Picture':'Question'}</button></div>
@@ -1093,7 +894,7 @@ function renderEditor() {
 function openCategoryModal() {
   const game = selectedGame(); if (!game) return;
   const cat = game.categories[activeCategory];
-  categoryDraft = { name: cat.name, icon: cat.icon, color: cat.color, type: cat.type || 'standard', description:cat.description||'', timerEnabled:Boolean(cat.timerEnabled), timerSeconds:cat.timerSeconds||30 };
+  categoryDraft = { name: cat.name, icon: cat.icon, iconGroup:iconGroupFor(cat.icon), color: cat.color, type: cat.type || 'standard', description:cat.description||'', timerEnabled:Boolean(cat.timerEnabled), timerSeconds:cat.timerSeconds||30 };
   categoryModalOpen = true;
   renderCategoryModal();
 }
@@ -1118,7 +919,7 @@ function renderCategoryModal() {
         <div class="music-modal-note picture-modal-note" ${categoryDraft.type==='picture'?'':'hidden'}>🖼️ Upload one image for each of the 10 picture questions. The image appears on the projector; the answer stays hidden.</div>
         <div class="timer-setting-row"><label class="timer-toggle"><input id="categoryDraftTimerEnabled" type="checkbox" ${categoryDraft.timerEnabled?'checked':''}><span><strong>Question Timer + Auto Advance</strong><small>Automatically move to the next question when time expires. Pass Your Papers always stays manual.</small></span></label><label class="timer-seconds">Seconds<input id="categoryDraftTimerSeconds" class="text-input" type="number" min="5" max="300" step="5" value="${categoryDraft.timerSeconds||30}" ${categoryDraft.timerEnabled?'':'disabled'}></label></div>
         <div class="form-field"><label>Category Color</label><div class="color-picker">${COLOR_LIBRARY.map(color => `<button class="color-swatch ${color.toLowerCase()===categoryDraft.color.toLowerCase()?'selected':''}" style="--swatch:${color}" data-action="pick-color" data-color="${color}" title="${color}" aria-label="Choose color ${color}"></button>`).join('')}</div></div>
-        <div class="form-field"><label>Choose an Icon</label><p class="picker-help">More than 100 icons are available. Pick one that matches the round.</p><div class="icon-picker">${ICON_LIBRARY.map(icon => `<button class="icon-choice ${icon===categoryDraft.icon?'selected':''}" data-action="pick-icon" data-icon="${icon}" aria-label="Choose ${icon}"><span>${icon}</span></button>`).join('')}</div></div>
+        <div class="form-field"><label>Choose an Icon</label><p class="picker-help">Choose a subject folder, then pick one of five distinct icons.</p><div class="icon-group-picker"><select id="categoryDraftIconGroup" class="text-input">${Object.keys(ICON_GROUPS).map(group=>`<option value="${esc(group)}" ${group===(categoryDraft.iconGroup||iconGroupFor(categoryDraft.icon))?'selected':''}>${esc(group)}</option>`).join('')}</select><div class="icon-picker icon-picker-grouped">${(ICON_GROUPS[categoryDraft.iconGroup||iconGroupFor(categoryDraft.icon)]||ICON_GROUPS[Object.keys(ICON_GROUPS)[0]]).map(icon=>`<button class="icon-choice ${icon===categoryDraft.icon?'selected':''}" data-action="pick-icon" data-icon="${icon}" aria-label="Choose ${icon}"><span>${icon}</span></button>`).join('')}</div></div></div>
         <div class="modal-preview" style="--category-color:${categoryDraft.color}"><div class="modal-preview-icon">${categoryDraft.icon}</div><div><span>${typeLabel}</span><strong>${esc(categoryDraft.name || `Category ${activeCategory+1}`)}${categoryDraft.type==='music'?' ♫':categoryDraft.type==='picture'?' 🖼️':''}</strong><small>${esc(categoryDraft.description || '')}</small></div></div>
         <div class="modal-actions"><button class="ui-btn" data-action="category-cancel">Cancel</button><button class="ui-btn ui-btn-teal" data-action="category-save">✓ Save Category</button></div>
       </section>
@@ -1134,6 +935,7 @@ function renderPresentationModal(){
     <section class="category-modal presentation-modal" role="dialog" aria-modal="true" aria-label="Presentation setup">
       <div class="modal-header"><div><div class="panel-title">PRESENTATION SETUP</div><h2>Theme, Pre-Game & Break Slides</h2></div><button class="modal-close" data-action="presentation-close" aria-label="Close">×</button></div>
       <div class="form-field"><label>Presenter Theme / Background</label><div class="theme-picker">${THEME_LIBRARY.map(t=>`<button class="theme-choice theme-${t.id} ${game.theme===t.id?'selected':''}" data-action="theme-select" data-theme="${t.id}"><span class="theme-preview"></span><strong>${t.name}</strong><small>${t.desc}</small></button>`).join('')}</div></div>
+      <section class="projector-fit-panel"><div class="presentation-section"><div><h3>Projector Fit / Safe Margins</h3><p>Adjust this before game night if a projector crowds the top or leaves too much unused space on the sides.</p></div></div><div class="projector-fit-grid"><label><span>Projector Profile</span><select id="presenterPresetInput" class="text-input"><option value="auto" ${game.presenterLayout?.preset==='auto'?'selected':''}>Auto / Browser Size</option><option value="16:9" ${game.presenterLayout?.preset==='16:9'?'selected':''}>16:9 Widescreen</option><option value="16:10" ${game.presenterLayout?.preset==='16:10'?'selected':''}>16:10 Projector</option><option value="4:3" ${game.presenterLayout?.preset==='4:3'?'selected':''}>4:3 Projector</option><option value="custom" ${game.presenterLayout?.preset==='custom'?'selected':''}>Custom</option></select></label><label><span>Content Width <b id="contentWidthValue">${game.presenterLayout?.contentWidth||98}%</b></span><input id="presenterContentWidthInput" type="range" min="78" max="100" step="1" value="${game.presenterLayout?.contentWidth||98}"></label><label><span>Top Safe Margin <b id="topSafeValue">${game.presenterLayout?.topSafe||0}%</b></span><input id="presenterTopSafeInput" type="range" min="0" max="12" step="0.5" value="${game.presenterLayout?.topSafe||0}"></label></div><p class="picker-help">Start at 98% width / 0% top. On older 4:3 projectors, adding 1–3% top margin usually helps keep the header clear.</p></section>
       <div class="presentation-section"><div><h3>Pre-Game Announcement Loop</h3><p>Upload announcement/rules images. They loop continuously until you manually start Category 1.</p></div><label class="ui-btn ui-btn-primary file-button">＋ Add Images<input id="announcementImagesInput" type="file" accept="image/*" multiple hidden></label></div>
       <div class="announcement-options"><label>Seconds per slide<input id="announcementSecondsInput" class="text-input" type="number" min="2" max="60" value="${game.announcementSeconds||8}"></label><span>${game.announcements.length}/12 slides</span></div>
       <div class="announcement-grid">${game.announcements.length?game.announcements.map((a,i)=>`<div class="announcement-thumb"><img src="${a.image}" alt="Announcement ${i+1}"><span>${i+1}. ${esc(a.name||'Announcement')}</span><button data-action="remove-announcement" data-index="${i}" aria-label="Remove announcement">×</button></div>`).join(''):'<div class="empty-media-state">No pre-game images uploaded.</div>'}</div>
@@ -1142,6 +944,7 @@ function renderPresentationModal(){
       <div class="presentation-section between-category-section"><div><h3>Between-Category Slides</h3><p>Optional single image after any category. Each slide waits for you to manually advance. After Category 4, this slide appears before the Halftime screen if both are enabled.</p></div></div>
       <div class="between-slide-grid">${game.betweenCategorySlides.map((slide,i)=>`<div class="between-slide-card"><div class="between-slide-card-head"><strong>After Category ${i+1}</strong><span>Before Category ${i+2}</span></div>${slide.image?`<img src="${slide.image}" alt="Between Category ${i+1} and ${i+2}"><button class="ui-btn ui-btn-small ui-btn-coral" data-action="remove-between-slide" data-index="${i}">Remove</button>`:`<div class="between-slide-empty">No slide</div>`}<label class="ui-btn ui-btn-small file-button">${slide.image?'Replace Image':'Upload Image'}<input id="betweenCategoryImageInput${i}" data-between-index="${i}" type="file" accept="image/*" hidden></label></div>`).join('')}</div>
       ${countEmbeddedImages(game)?`<div class="cloud-storage-note"><div><strong>☁ Move Existing Images to Cloud</strong><span>${countEmbeddedImages(game)} older embedded image${countEmbeddedImages(game)===1?'':'s'} still use browser storage. Move them to Vercel Blob to free space.</span></div><button class="ui-btn ui-btn-primary ui-btn-small" data-action="migrate-cloud-images">Move ${countEmbeddedImages(game)} Image${countEmbeddedImages(game)===1?'':'s'}</button></div>`:`<p class="image-storage-note">☁ New images are stored in Vercel Blob cloud storage. Existing cloud image URLs remain part of exported .trivia files.</p>`}
+      <div class="presentation-defaults-note"><strong>Saved for new games</strong><span>Pre-game slides, halftime, and all six between-category slide positions are automatically reused when you create a new game.</span></div>
       <div class="modal-actions"><button class="ui-btn ui-btn-teal" data-action="presentation-close">✓ Done</button></div>
     </section></div>`;
 }
@@ -1167,7 +970,7 @@ function deleteGame() {
 }
 function clearQuestion() {
   const game=selectedGame(); if (!game) return;
-  game.categories[activeCategory].questions[activeQuestion]={question:'',answer:'',image:'',youtubeUrl:'',youtubeIn:0,youtubeOut:0};
+  game.categories[activeCategory].questions[activeQuestion]=blankQuestion();
   touch(game,'Cleared'); renderEditor();
 }
 function clearBonus() {
@@ -1184,7 +987,7 @@ function exportGame() {
   const game=selectedGame(); if (!game) return;
   const triviaFile = {
     format: 'trivia-night-game',
-    formatVersion: 2,
+    formatVersion: 3,
     exportedAt: new Date().toISOString(),
     game
   };
@@ -1228,6 +1031,10 @@ function saveActiveField(target) {
   const cat=game.categories[activeCategory]; const q=cat.questions[activeQuestion];
   if (target.id==='gameTitle') game.title=target.value;
   if (target.id==='questionInput') q.question=target.value;
+  if (target.id==='questionFormatInput') { q.format=target.value==='multiple-choice'?'multiple-choice':'standard'; touch(game,'Question layout saved'); renderEditor(); return; }
+  if (/^choice[A-D]Input$/.test(target.id)) { const key=target.id.charAt(6).toLowerCase(); q.choices=q.choices||{a:'',b:'',c:'',d:''}; q.choices[key]=target.value; }
+  if (target.id==='questionFontInput') { q.formatting=normalizeFormatting({...q.formatting,fontFamily:target.value}); touch(game,'Slide formatting saved'); renderEditor(); return; }
+  if (target.id==='questionSizeInput') { q.formatting=normalizeFormatting({...q.formatting,fontSize:target.value}); touch(game,'Slide formatting saved'); renderEditor(); return; }
   if (target.id==='answerInput') q.answer=target.value;
   if (target.id==='youtubeUrlInput') q.youtubeUrl=target.value.trim();
   if (target.id==='musicTrimInInput') { if(musicTrimDraft){musicTrimDraft.in=parseTimecode(target.value);if(trimDraftOut()&&trimDraftOut()<=musicTrimDraft.in)musicTrimDraft.out=0;updateMusicTrimSummary(false);setMusicTrimMessage('IN value changed — click Save Clip Marks to keep it.','dirty');} return; }
@@ -1243,20 +1050,32 @@ function saveActiveField(target) {
   if (target.id==='bonusNameInput') game.bonus.name=target.value;
   if (target.id==='bonusQuestionInput') game.bonus.question=target.value;
   if (target.id==='bonusAnswerInput') game.bonus.answer=target.value;
+  if (target.id==='bonusFontInput') { game.bonus.formatting=normalizeFormatting({...game.bonus.formatting,fontFamily:target.value}); touch(game,'Bonus slide formatting saved'); renderEditor(); return; }
+  if (target.id==='bonusSizeInput') { game.bonus.formatting=normalizeFormatting({...game.bonus.formatting,fontSize:target.value}); touch(game,'Bonus slide formatting saved'); renderEditor(); return; }
   if (target.id==='tieBreakerNameInput') game.tieBreaker.name=target.value;
   if (target.id==='tieBreakerQuestionInput') game.tieBreaker.question=target.value;
   if (target.id==='tieBreakerAnswerInput') game.tieBreaker.answer=target.value;
+  if (target.id==='tieBreakerFontInput') { game.tieBreaker.formatting=normalizeFormatting({...game.tieBreaker.formatting,fontFamily:target.value}); touch(game,'Tie breaker slide formatting saved'); renderEditor(); return; }
+  if (target.id==='tieBreakerSizeInput') { game.tieBreaker.formatting=normalizeFormatting({...game.tieBreaker.formatting,fontSize:target.value}); touch(game,'Tie breaker slide formatting saved'); renderEditor(); return; }
   if (target.id==='tieBreakerEnabled') { game.tieBreaker.enabled=target.checked; touch(game,target.checked?'Tie breaker enabled':'Tie breaker disabled'); renderDashboard(); renderEditor(); return; }
   if (target.id==='bonusEnabled') { game.bonus.enabled=target.checked; touch(game,target.checked?'Bonus enabled':'Bonus disabled'); renderDashboard(); renderEditor(); return; }
-  if (target.id==='announcementSecondsInput') { game.announcementSeconds=Math.min(60,Math.max(2,Number(target.value)||8)); touch(game,'Slide timing saved'); return; }
+  if (target.id==='announcementSecondsInput') { game.announcementSeconds=Math.min(60,Math.max(2,Number(target.value)||8)); savePresentationDefaultsFromGame(game); touch(game,'Slide timing saved'); return; }
+  if (target.id==='presenterPresetInput') {
+    const preset=['auto','16:9','16:10','4:3','custom'].includes(target.value)?target.value:'auto';
+    game.presenterLayout=game.presenterLayout||defaultPresenterLayout(); game.presenterLayout.preset=preset;
+    const presets={'auto':[98,0],'16:9':[99,0],'16:10':[98,1],'4:3':[100,2]};
+    if(presets[preset]) [game.presenterLayout.contentWidth,game.presenterLayout.topSafe]=presets[preset];
+    touch(game,'Projector profile saved'); renderPresentationModal(); return;
+  }
+  if (target.id==='presenterContentWidthInput') { game.presenterLayout=game.presenterLayout||defaultPresenterLayout(); game.presenterLayout.contentWidth=Math.min(100,Math.max(78,Number(target.value)||98)); game.presenterLayout.preset='custom'; const out=document.querySelector('#contentWidthValue'); if(out)out.textContent=`${game.presenterLayout.contentWidth}%`; touch(game); return; }
+  if (target.id==='presenterTopSafeInput') { game.presenterLayout=game.presenterLayout||defaultPresenterLayout(); game.presenterLayout.topSafe=Math.min(12,Math.max(0,Number(target.value)||0)); game.presenterLayout.preset='custom'; const out=document.querySelector('#topSafeValue'); if(out)out.textContent=`${game.presenterLayout.topSafe}%`; touch(game); return; }
   if (target.id==='categoryDraftName' && categoryDraft) { categoryDraft.name=target.value; const preview=document.querySelector('.modal-preview strong'); if(preview) preview.textContent=(target.value || `Category ${activeCategory+1}`) + (categoryDraft.type==='music'?' ♫':categoryDraft.type==='picture'?' 🖼️':''); return; }
   if (target.id==='categoryDraftDescription' && categoryDraft) { categoryDraft.description=target.value; const preview=document.querySelector('.modal-preview small'); if(preview) preview.textContent=target.value; return; }
   if (target.id==='categoryDraftType' && categoryDraft) { categoryDraft.type=['music','picture'].includes(target.value)?target.value:'standard'; renderCategoryModal(); return; }
   if (target.id==='categoryDraftTimerEnabled' && categoryDraft) { categoryDraft.timerEnabled=target.checked; renderCategoryModal(); return; }
   if (target.id==='categoryDraftTimerSeconds' && categoryDraft) { categoryDraft.timerSeconds=Math.min(300,Math.max(5,Number(target.value)||30)); return; }
-  if (target.id==='aiDifficulty') { aiDifficulty=target.value || 'medium'; return; }
-  if (target.id==='aiFocus') { aiFocus=target.value; return; }
-  if (!['gameTitle','questionInput','answerInput','youtubeUrlInput','youtubeInInput','youtubeOutInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput','tieBreakerNameInput','tieBreakerQuestionInput','tieBreakerAnswerInput'].includes(target.id)) return;
+  if (target.id==='categoryDraftIconGroup' && categoryDraft) { categoryDraft.iconGroup=ICON_GROUPS[target.value]?target.value:Object.keys(ICON_GROUPS)[0]; const icons=ICON_GROUPS[categoryDraft.iconGroup]; if(!icons.includes(categoryDraft.icon)) categoryDraft.icon=icons[0]; renderCategoryModal(); return; }
+  if (!['gameTitle','questionInput','answerInput','youtubeUrlInput','youtubeInInput','youtubeOutInput','bonusNameInput','bonusQuestionInput','bonusAnswerInput','tieBreakerNameInput','tieBreakerQuestionInput','tieBreakerAnswerInput','choiceAInput','choiceBInput','choiceCInput','choiceDInput'].includes(target.id)) return;
   touch(game);
   if (target.id==='questionInput' || target.id==='bonusQuestionInput' || target.id==='tieBreakerQuestionInput') { const preview=document.querySelector('.mini-question'); if(preview) preview.textContent=target.value || (activeTieBreaker ? 'Your tie-breaker question will appear here.' : activeBonus ? 'Your bonus question will appear here.' : 'Your question will appear here.'); }
 }
@@ -1270,13 +1089,11 @@ function routeAction(el) {
   if (action==='answer-pdf') exportAnswerSheetsPdf(el.dataset.id);
   if (action==='delete') deleteGame();
   if (action==='clear-question') { resetHelper(); clearQuestion(); }
-  if (action==='helper-suggest') { aiHelperError=''; suggestHelper(); }
-  if (action==='helper-use') useHelperSuggestion();
-  if (action==='ai-generate') generateAIHelper(false);
-  if (action==='ai-fill') generateAIHelper(true);
   if (action==='clear-bonus') clearBonus();
   if (action==='clear-tie-breaker') clearTieBreaker();
   if (action==='save') { if(activeMusicQuestion() && musicTrimDraft) commitMusicTrimMarks('Clip marks saved'); persist(); setStatus('Saved'); renderDashboard(); }
+  if (action==='format-bold' || action==='format-italic' || action==='format-underline') { const game=selectedGame(); const q=game?.categories?.[activeCategory]?.questions?.[activeQuestion]; if(!q)return; q.formatting=normalizeFormatting(q.formatting||{}); if(action==='format-bold')q.formatting.bold=!q.formatting.bold; if(action==='format-italic')q.formatting.italic=!q.formatting.italic; if(action==='format-underline')q.formatting.underline=!q.formatting.underline; touch(game,'Slide formatting saved'); renderEditor(); }
+  if (['bonus-format-bold','bonus-format-italic','bonus-format-underline','tie-format-bold','tie-format-italic','tie-format-underline'].includes(action)) { const game=selectedGame(); if(!game)return; const targetObj=action.startsWith('bonus-')?game.bonus:game.tieBreaker; targetObj.formatting=normalizeFormatting(targetObj.formatting||{}); if(action.endsWith('bold'))targetObj.formatting.bold=!targetObj.formatting.bold; if(action.endsWith('italic'))targetObj.formatting.italic=!targetObj.formatting.italic; if(action.endsWith('underline'))targetObj.formatting.underline=!targetObj.formatting.underline; touch(game,'Slide formatting saved'); renderEditor(); }
   if (action==='music-trim-load') reloadMusicTrimVideo();
   if (action==='music-trim-play') playMusicTrimClip();
   if (action==='music-trim-pause') { try{musicTrimPlayer?.pauseVideo?.();}catch{} }
@@ -1284,6 +1101,7 @@ function routeAction(el) {
   if (action==='music-trim-set-out') setMusicTrimOutHere();
   if (action==='music-trim-go-in') goMusicTrimTo(trimDraftIn());
   if (action==='music-trim-go-out') { const out=trimDraftOut(); if(out)goMusicTrimTo(out); }
+  if (action==='music-trim-clear-in') { if(musicTrimDraft){musicTrimDraft.in=0;updateMusicTrimSummary(false);commitMusicTrimMarks('IN mark cleared'); if(musicTrimPlayerReady) goMusicTrimTo(0);} }
   if (action==='music-trim-clear-out') { if(musicTrimDraft){musicTrimDraft.out=0;updateMusicTrimSummary(false);commitMusicTrimMarks('OUT mark cleared');} }
   if (action==='music-trim-save') { syncMusicTrimDraftFromInputs(); commitMusicTrimMarks('Clip marks saved'); }
   if (action==='category') { saveActiveMusicTrimDraft('Clip marks saved'); activeBonus=false; activeTieBreaker=false; activeCategory=Number(el.dataset.index); activeQuestion=0; resetHelper(); closeCategoryModal(); closePresentationModal(); renderEditor(); }
@@ -1304,16 +1122,16 @@ function routeAction(el) {
   }
   if (action==='remove-announcement') {
     const game=selectedGame(); if(!game) return;
-    game.announcements.splice(Number(el.dataset.index),1); touch(game,'Announcement removed'); renderPresentationModal();
+    game.announcements.splice(Number(el.dataset.index),1); savePresentationDefaultsFromGame(game); touch(game,'Announcement removed'); renderPresentationModal();
   }
   if (action==='remove-halftime') {
     const game=selectedGame(); if(!game) return;
-    game.halftimeImage=''; game.halftimeName=''; touch(game,'Halftime image removed'); renderPresentationModal();
+    game.halftimeImage=''; game.halftimeName=''; savePresentationDefaultsFromGame(game); touch(game,'Halftime image removed'); renderPresentationModal();
   }
   if (action==='remove-between-slide') {
     const game=selectedGame(); if(!game) return;
     const i=Number(el.dataset.index);
-    if(Number.isInteger(i) && i>=0 && i<6){ game.betweenCategorySlides[i]={image:'',name:`Between Category ${i+1} & ${i+2}`}; touch(game,`Between-category slide ${i+1} removed`); renderPresentationModal(); }
+    if(Number.isInteger(i) && i>=0 && i<6){ game.betweenCategorySlides[i]={image:'',name:`Between Category ${i+1} & ${i+2}`}; savePresentationDefaultsFromGame(game); touch(game,`Between-category slide ${i+1} removed`); renderPresentationModal(); }
   }
   if (action==='remove-picture') {
     const game=selectedGame(); if(!game) return;
@@ -1356,7 +1174,8 @@ async function handleImageInput(target){
         game.announcements.push({id:makeId(),image,name:file.name.replace(/\.[^.]+$/,'')||'Announcement'});
         added++; persist();
       }
-      setStatus(`${added} announcement${added===1?'':'s'} uploaded to cloud`);
+      savePresentationDefaultsFromGame(game);
+            setStatus(`${added} announcement${added===1?'':'s'} uploaded to cloud`);
       renderPresentationModal();
     }
     if(target.id==='halftimeImageInput' && target.files[0]){
@@ -1364,7 +1183,7 @@ async function handleImageInput(target){
       setStatus('Uploading halftime image to cloud…');
       game.halftimeImage=await prepareAndUploadImage(file,{maxW:1800,maxH:1200,quality:.86,maxBytes:3200000,gameId:game.id,purpose:'halftime'});
       game.halftimeName=file.name.replace(/\.[^.]+$/,'');
-      persist(); setStatus('Halftime image uploaded to cloud'); renderPresentationModal();
+      persist(); savePresentationDefaultsFromGame(game); setStatus('Halftime image uploaded to cloud'); renderPresentationModal();
     }
     if(target.id.startsWith('betweenCategoryImageInput') && target.files[0]){
       const i=Number(target.dataset.betweenIndex ?? target.id.replace('betweenCategoryImageInput',''));
@@ -1373,7 +1192,7 @@ async function handleImageInput(target){
         setStatus(`Uploading slide after Category ${i+1} to cloud…`);
         const image=await prepareAndUploadImage(file,{maxW:1800,maxH:1200,quality:.86,maxBytes:3200000,gameId:game.id,purpose:`between-category-${i+1}`});
         game.betweenCategorySlides[i]={image,name:file.name.replace(/\.[^.]+$/,'') || `Between Category ${i+1} & ${i+2}`};
-        persist(); setStatus(`Slide after Category ${i+1} uploaded to cloud`); renderPresentationModal();
+        persist(); savePresentationDefaultsFromGame(game); setStatus(`Slide after Category ${i+1} uploaded to cloud`); renderPresentationModal();
       }
     }
     if(target.id==='pictureImageInput' && target.files[0]){
