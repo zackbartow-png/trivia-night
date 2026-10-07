@@ -28,6 +28,24 @@ function catColor(cat){ return /^#[0-9a-f]{6}$/i.test(cat?.color||'') ? cat.colo
 function catName(cat){ return cat?.name || `Category ${categoryIndex+1}`; }
 function catType(cat){ return ['music','picture'].includes(cat?.type)?cat.type:'standard'; }
 function catDescription(cat){ return String(cat?.description||'').trim(); }
+function questionFormat(item){ return item?.format==='multiple-choice'?'multiple-choice':'standard'; }
+function questionChoices(item){ const c=item?.choices||{}; return {a:c.a||'',b:c.b||'',c:c.c||'',d:c.d||''}; }
+function questionFormatting(item){
+  const f=item?.formatting||{};
+  const allowedFonts=['default','Arial','Trebuchet MS','Verdana','Georgia','Courier New','Impact'];
+  const allowedSizes=['auto','small','medium','large','xlarge'];
+  return {fontFamily:allowedFonts.includes(f.fontFamily)?f.fontFamily:'default',fontSize:allowedSizes.includes(f.fontSize)?f.fontSize:'auto',bold:f.bold!==false,italic:Boolean(f.italic),underline:Boolean(f.underline)};
+}
+function questionStyle(item){
+  const f=questionFormatting(item);
+  const family=f.fontFamily==='default'?'inherit':`'${f.fontFamily.replace(/'/g,'')}','Arial',sans-serif`;
+  const sizeMap={auto:'',small:'clamp(26px,3.2vw,50px)',medium:'clamp(32px,4.1vw,64px)',large:'clamp(38px,5vw,78px)',xlarge:'clamp(44px,6vw,92px)'};
+  const rules=[`font-family:${family}`,`font-weight:${f.bold?1000:650}`,`font-style:${f.italic?'italic':'normal'}`,`text-decoration:${f.underline?'underline':'none'}`];
+  if(sizeMap[f.fontSize]) rules.push(`font-size:${sizeMap[f.fontSize]}`);
+  return rules.join(';');
+}
+function presenterLayout(){ const v=game?.presenterLayout||{}; return {contentWidth:Math.min(100,Math.max(78,Number(v.contentWidth)||98)),topSafe:Math.min(12,Math.max(0,Number(v.topSafe)||0))}; }
+function applyPresenterLayout(){ const l=presenterLayout(); const side=Math.max(0,(100-l.contentWidth)/2); document.documentElement.style.setProperty('--presenter-content-width',`${l.contentWidth}%`); document.documentElement.style.setProperty('--presenter-side-safe',`${side}vw`); document.documentElement.style.setProperty('--presenter-top-safe',`${l.topSafe}vh`); }
 function timerEnabled(cat){ return Boolean(cat?.timerEnabled) && Number(cat?.timerSeconds)>0; }
 function timerSeconds(cat){ return Math.min(300,Math.max(5,Number(cat?.timerSeconds)||30)); }
 function bonusEnabled(){ return Boolean(game?.bonus?.enabled); }
@@ -46,7 +64,7 @@ function hasHalftime(){ return Boolean(game?.halftimeImage); }
 function clearTimer(){ if(timerHandle){clearInterval(timerHandle);timerHandle=null;} }
 function clearAnnouncementLoop(){ if(announcementHandle){clearInterval(announcementHandle);announcementHandle=null;} }
 function clearAutomation(){ clearTimer(); clearAnnouncementLoop(); }
-function setTheme(){ document.body.dataset.theme=game?.theme||'party'; }
+function setTheme(){ document.body.dataset.theme=game?.theme||'party'; applyPresenterLayout(); }
 function broadcastPresenterState(){
   if(!game) return;
   const payload={type:'presenter-state',gameId:game.id,phase,categoryIndex,questionIndex,updatedAt:Date.now()};
@@ -94,10 +112,12 @@ function timerMarkup(cat){ return timerEnabled(cat)?`<div class="question-timer"
 // The font starts at the theme/CSS size, then steps down only when needed.
 function fitPresenterQuestions(){
   requestAnimationFrame(()=>{
-    document.querySelectorAll('.slide-question').forEach(el=>{
+    document.querySelectorAll('.slide-question, .mc-content').forEach(el=>{
       const slide=el.closest('.slide');
       if(!slide) return;
-      el.style.fontSize='';
+      const requested=el.dataset.userSize||'auto';
+      const requestedSizes={small:'clamp(26px,3.2vw,50px)',medium:'clamp(32px,4.1vw,64px)',large:'clamp(38px,5vw,78px)',xlarge:'clamp(44px,6vw,92px)'};
+      el.style.fontSize=requestedSizes[requested]||'';
       el.style.maxHeight='';
 
       const slideRect=slide.getBoundingClientRect();
@@ -118,6 +138,11 @@ function fitPresenterQuestions(){
         size-=2;
         el.style.fontSize=`${size}px`;
         guard++;
+      }
+      if(el.classList.contains('mc-content') && el.scrollHeight>availableHeight+1){
+        el.classList.add('mc-compact');
+      } else if(el.classList.contains('mc-content')) {
+        el.classList.remove('mc-compact');
       }
     });
   });
@@ -179,13 +204,31 @@ function render(resetAutomation=true){
       </section>`;
     } else {
       const text=item.question || '[Question not entered]';
-      stage.innerHTML=`<section class="slide confetti-field" style="--slide-color:${color}">
-        <div class="slide-category">${icon} ${esc(name)}</div>
-        <div class="slide-count">QUESTION ${questionIndex+1} OF 10</div>
-        ${timerMarkup(cat)}
-        <div class="question-star left">★</div><div class="question-star right">★</div>
-        <div class="slide-question">${esc(text)}</div>
-      </section>`;
+      const format=questionFormat(item), choices=questionChoices(item), f=questionFormatting(item), style=questionStyle(item);
+      if(format==='multiple-choice'){
+        stage.innerHTML=`<section class="slide multiple-choice-slide confetti-field" style="--slide-color:${color}">
+          <div class="slide-category">${icon} ${esc(name)}</div>
+          <div class="slide-count">QUESTION ${questionIndex+1} OF 10</div>
+          ${timerMarkup(cat)}
+          <div class="mc-content" data-user-size="${f.fontSize}" style="${style}">
+            <div class="mc-question">${esc(text)}</div>
+            <div class="mc-grid">
+              <div class="mc-option"><b>A</b><span>${esc(choices.a||'[Choice A]')}</span></div>
+              <div class="mc-option"><b>B</b><span>${esc(choices.b||'[Choice B]')}</span></div>
+              <div class="mc-option"><b>C</b><span>${esc(choices.c||'[Choice C]')}</span></div>
+              <div class="mc-option"><b>D</b><span>${esc(choices.d||'[Choice D]')}</span></div>
+            </div>
+          </div>
+        </section>`;
+      } else {
+        stage.innerHTML=`<section class="slide confetti-field" style="--slide-color:${color}">
+          <div class="slide-category">${icon} ${esc(name)}</div>
+          <div class="slide-count">QUESTION ${questionIndex+1} OF 10</div>
+          ${timerMarkup(cat)}
+          <div class="question-star left">★</div><div class="question-star right">★</div>
+          <div class="slide-question" data-user-size="${f.fontSize}" style="${style}">${esc(text)}</div>
+        </section>`;
+      }
     }
     nextBtn.querySelector('span').textContent=questionIndex===9?'Pass Papers':'Next';
     startQuestionTimer(cat);
@@ -235,7 +278,7 @@ function render(resetAutomation=true){
       <div class="slide-category bonus-ribbon">⭐ ${esc(bonusName()).toUpperCase()}</div>
       <div class="slide-count">FINAL QUESTION</div>
       <div class="question-star left">★</div><div class="question-star right">★</div>
-      <div class="slide-question">${esc(bonusQuestion())}</div>
+      <div class="slide-question" data-user-size="${questionFormatting(game.bonus).fontSize}" style="${questionStyle(game.bonus)}">${esc(bonusQuestion())}</div>
     </section>`;
     nextBtn.querySelector('span').textContent='Show Answer';
   } else if(phase==='bonusAnswer'){
@@ -263,7 +306,7 @@ function render(resetAutomation=true){
       <div class="slide-category bonus-ribbon" style="background:${TIE_COLOR}">🎯 ${esc(tieBreakerName()).toUpperCase()}</div>
       <div class="slide-count">TIE BREAKER</div>
       <div class="question-star left">★</div><div class="question-star right">★</div>
-      <div class="slide-question">${esc(tieBreakerQuestion())}</div>
+      <div class="slide-question" data-user-size="${questionFormatting(game.tieBreaker).fontSize}" style="${questionStyle(game.tieBreaker)}">${esc(tieBreakerQuestion())}</div>
     </section>`;
     nextBtn.querySelector('span').textContent='Show Answer';
   } else if(phase==='tieBreakerAnswer'){
@@ -382,6 +425,12 @@ presenterChannel?.addEventListener('message',e=>handlePresenterCommand(e.data||{
 window.addEventListener('storage',e=>{
   if(e.key===presenterCommandKey && e.newValue){
     try{ handlePresenterCommand(JSON.parse(e.newValue)); }catch{}
+  }
+  if(e.key===STORAGE_KEY && e.newValue && game){
+    try{
+      const fresh=(JSON.parse(e.newValue)||[]).find(g=>g.id===game.id);
+      if(fresh){ Object.keys(game).forEach(k=>delete game[k]); Object.assign(game,fresh); render(false); }
+    }catch{}
   }
 });
 nextBtn.addEventListener('click',next); backBtn.addEventListener('click',back); fullscreenBtn.addEventListener('click',fullscreen);
